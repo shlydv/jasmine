@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jasmine Residency — Rent Manager</title>
+<style>
+  :root {
+    --blue: #1a6fc4;
+    --blue-light: #e8f0fb;
+    --green: #1a8a4a;
+    --green-light: #e6f4ec;
+    --red: #c0392b;
+    --red-light: #fdecea;
+    --orange: #e67e22;
+    --orange-light: #fef3e2;
+    --gray: #555;
+    --border: #ccc;
+    --bg: #f4f6f9;
+    --white: #fff;
+    --shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: #222;
+    font-size: 16px;
+    min-height: 100vh;
+  }
+  header {
+    background: var(--blue);
+    color: white;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow);
+  }
+  header h1 { font-size: 22px; font-weight: 700; }
+  header p { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+  .header-right { font-size: 13px; opacity: 0.85; text-align: right; }
+
+  /* ── SCREENS ── */
+  .screen { display: none; padding: 20px; max-width: 900px; margin: 0 auto; }
+  .screen.active { display: block; }
+
+  /* ── HOME ── */
+  .home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+    margin-top: 20px;
+  }
+  .flat-card {
+    background: var(--white);
+    border-radius: 10px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    border: 2px solid transparent;
+    transition: border-color 0.15s, transform 0.1s;
+    user-select: none;
+  }
+  .flat-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .flat-card .flat-num { font-size: 26px; font-weight: 700; color: var(--blue); }
+  .flat-card .flat-name { font-size: 13px; color: var(--gray); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .flat-card .flat-due {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    display: inline-block;
+  }
+  .flat-card .flat-due.ok { background: var(--green-light); color: var(--green); }
+  .flat-card .flat-due.due { background: var(--red-light); color: var(--red); }
+  .flat-card .flat-due.partial { background: var(--orange-light); color: var(--orange); }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 4px;
+    margin-top: 24px;
+    border-left: 4px solid var(--blue);
+    padding-left: 10px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  /* ── TENANT DETAIL ── */
+  .back-btn {
+    background: none;
+    border: none;
+    color: var(--blue);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 8px 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .back-btn:hover { text-decoration: underline; }
+
+  .tenant-header {
+    background: var(--white);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  .tenant-header .th-main { flex: 1; min-width: 200px; }
+  .tenant-header h2 { font-size: 22px; color: var(--blue); }
+  .tenant-header .th-meta { font-size: 14px; color: var(--gray); margin-top: 4px; }
+  .tenant-header .th-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat-box {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 16px;
+    text-align: center;
+    min-width: 110px;
+  }
+  .stat-box .sb-label { font-size: 12px; color: var(--gray); }
+  .stat-box .sb-val { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .stat-box.red .sb-val { color: var(--red); }
+  .stat-box.green .sb-val { color: var(--green); }
+  .stat-box.blue .sb-val { color: var(--blue); }
+
+  /* ── TABS ── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab-btn {
+    padding: 9px 18px;
+    border: 2px solid var(--border);
+    background: var(--white);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray);
+    transition: all 0.15s;
+  }
+  .tab-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+  .tab-btn:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── FORMS ── */
+  .card {
+    background: var(--white);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  .card h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; color: #333; }
+  .form-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+  .form-group { display: flex; flex-direction: column; flex: 1; min-width: 160px; }
+  .form-group label { font-size: 13px; font-weight: 600; color: var(--gray); margin-bottom: 5px; }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 16px;
+    color: #222;
+    background: var(--white);
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+  .form-group input[readonly] { background: var(--bg); color: var(--gray); }
+  .form-group .hint { font-size: 12px; color: #888; margin-top: 3px; }
+
+  .btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-success { background: var(--green); color: white; }
+  .btn-danger { background: var(--red); color: white; }
+  .btn-sm { padding: 6px 14px; font-size: 14px; }
+
+  /* ── HISTORY TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { background: var(--blue); color: white; padding: 10px 10px; text-align: left; white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  tr:hover td { background: var(--blue-light); }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-green { background: var(--green-light); color: var(--green); }
+  .badge-red { background: var(--red-light); color: var(--red); }
+  .badge-orange { background: var(--orange-light); color: var(--orange); }
+
+  /* ── ADD TENANT ── */
+  .add-tenant-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: opacity 0.15s;
+  }
+  .add-tenant-btn:hover { opacity: 0.88; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+  }
+  .modal h3 { font-size: 19px; font-weight: 700; margin-bottom: 18px; color: var(--blue); }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #222;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    z-index: 200;
+    transition: transform 0.3s;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { background: var(--green); }
+  #toast.error { background: var(--red); }
+
+  /* ── SUMMARY SCREEN ── */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 16px; }
+  .summary-card { background: var(--white); border-radius: 10px; padding: 16px; box-shadow: var(--shadow); }
+  .summary-card .sc-label { font-size: 13px; color: var(--gray); }
+  .summary-card .sc-val { font-size: 24px; font-weight: 700; color: var(--blue); margin-top: 4px; }
+
+  /* ── NAV ── */
+  nav {
+    background: var(--white);
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .nav-btn {
+    padding: 13px 20px;
+    border: none;
+    background: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--gray);
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .nav-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .nav-btn:hover:not(.active) { color: var(--blue); background: var(--blue-light); }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--gray); font-size: 16px; }
+  .empty-state .es-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* ── WHATSAPP MESSAGE BOX ── */
+  .wa-box {
+    background: #e9fbe5;
+    border: 2px solid #25d366;
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-family: monospace;
+    font-size: 15px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    color: #111;
+    margin-bottom: 16px;
+  }
+  .btn-whatsapp {
+    background: #25d366;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 17px;
+  }
+  .btn-copy {
+    background: #555;
+    color: white;
+    font-size: 15px;
+  }
+
+  @media (max-width: 500px) {
+    header h1 { font-size: 17px; }
+    .flat-card .flat-num { font-size: 20px; }
+    .home-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏢 Jasmine Residency</h1>
+    <p>Sikanderpur (Badha) Sector 85, Gurugram</p>
+  </div>
+  <div class="header-right" id="headerDate"></div>
+</header>
+
+<nav>
+  <button class="nav-btn active" onclick="showScreen('home')">🏠 All Flats</button>
+  <button class="nav-btn" onclick="showScreen('summary')">📊 Summary</button>
+  <button class="nav-btn" onclick="showScreen('addTenant')">➕ Add Tenant</button>
+  <button class="nav-btn" onclick="showScreen('backup')">💾 Backup</button>
+</nav>
+
+<!-- HOME SCREEN -->
+<div id="screen-home" class="screen active">
+  <div style="margin-top:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+    <div>
+      <div style="font-size:20px; font-weight:700;">All Flats</div>
+      <div style="font-size:14px; color:var(--gray);">Tap a flat to manage rent &amp; electricity</div>
+    </div>
+    <input id="searchBox" type="text" placeholder="🔍 Search flat / tenant…"
+      style="padding:9px 14px; border:2px solid var(--border); border-radius:8px; font-size:15px; min-width:200px;"
+      oninput="renderHome()">
+  </div>
+  <div class="home-grid" id="homeGrid"></div>
+</div>
+
+<!-- SUMMARY SCREEN -->
+<div id="screen-summary" class="screen">
+  <div class="section-title" style="margin-top:20px;">Property Overview</div>
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="section-title">Outstanding Dues</div>
+  <div class="card">
+    <div class="table-wrap">
+      <table id="duesTable">
+        <thead><tr>
+          <th>Flat</th><th>Tenant</th><th>Rent Due</th><th>Elec Due</th><th>Total Due</th>
+        </tr></thead>
+        <tbody id="duesTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- BACKUP SCREEN -->
+<div id="screen-backup" class="screen">
+  <div class="section-title" style="margin-top:20px;">💾 Backup &amp; Restore</div>
+  <p style="color:var(--gray); font-size:14px; margin-top:6px; margin-bottom:20px;">
+    All data is saved in this browser. Use Export to save a backup file to your phone/computer, and Import to restore it later or move to another device.
+  </p>
+
+  <div class="card" style="margin-bottom:20px;">
+    <h3 style="color:var(--green);">⬇️ Export — Save a Backup</h3>
+    <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Downloads all tenant data and billing history as a <strong>.json</strong> file. Keep this file safe — it's your full backup.</p>
+    <button class="btn btn-success" style="font-size:17px; padding:14px 28px;" onclick="exportData()">⬇️ Download Backup File</button>
+    <div id="exportInfo" style="margin-top:12px; font-size:13px; color:var(--gray);"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="color:var(--blue);">⬆️ Import — Restore from Backup</h3>
+    <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Select a previously exported <strong>.json</strong> backup file. <strong style="color:var(--red);">Warning: this will replace all current data.</strong></p>
+    <button class="btn btn-primary" style="font-size:17px; padding:14px 28px;" onclick="document.getElementById('importFileInput').click()">⬆️ Choose Backup File…</button>
+    <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+    <div id="importStatus" style="margin-top:14px; font-size:15px; font-weight:600;"></div>
+  </div>
+
+  <div class="card" style="background:#fff8e1; border:2px solid #f9a825;">
+    <h3 style="color:#b45309;">ℹ️ How to use Backup</h3>
+    <ul style="color:var(--gray); font-size:14px; line-height:2; padding-left:18px;">
+      <li>Tap <strong>Download Backup File</strong> every month after entering bills — saves to your Downloads folder</li>
+      <li>If you open this file on a new device or browser, tap <strong>Choose Backup File</strong> to restore</li>
+      <li>The backup file name includes today's date so you can keep multiple versions</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ADD TENANT SCREEN -->
+<div id="screen-addTenant" class="screen">
+  <div class="section-title" style="margin-top:20px;">Add New Tenant</div>
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Flat / Room Number *</label>
+        <input type="text" id="nt_flat" placeholder="e.g. 201">
+      </div>
+      <div class="form-group">
+        <label>Tenant Name *</label>
+        <input type="text" id="nt_name" placeholder="Full name">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Monthly Rent (₹) *</label>
+        <input type="number" id="nt_rent" placeholder="e.g. 8000">
+      </div>
+      <div class="form-group">
+        <label>Security Deposit (₹)</label>
+        <input type="number" id="nt_security" placeholder="e.g. 5000">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Mobile Number</label>
+        <input type="tel" id="nt_mobile" placeholder="10-digit number">
+      </div>
+      <div class="form-group">
+        <label>Rent Start Date</label>
+        <input type="date" id="nt_startDate">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" id="nt_address" placeholder="Home address">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="nt_email" placeholder="email@example.com">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>ID Proof Type</label>
+        <select id="nt_idType">
+          <option value="">Select…</option>
+          <option>Aadhaar Card</option>
+          <option>PAN Card</option>
+          <option>Passport</option>
+          <option>Voter ID</option>
+          <option>Driving Licence</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>ID Proof Number</label>
+        <input type="text" id="nt_idNum" placeholder="ID number">
+      </div>
+      <div class="form-group">
+        <label>Date of Birth</label>
+        <input type="date" id="nt_dob">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Initial Electricity Meter Reading</label>
+        <input type="number" id="nt_meterStart" placeholder="Starting units (e.g. 1500)">
+        <span class="hint">The meter reading when tenant moved in</span>
+      </div>
+      <div class="form-group">
+        <label>Electricity Rate (₹/unit)</label>
+        <input type="number" id="nt_elecRate" value="9" placeholder="9">
+      </div>
+    </div>
+    <button class="btn btn-success" onclick="addTenant()" style="margin-top:8px;">✅ Add Tenant</button>
+  </div>
+</div>
+
+<!-- TENANT DETAIL SCREEN -->
+<div id="screen-tenant" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">← Back to All Flats</button>
+  <div class="tenant-header" id="tenantHeader"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('billing')">💰 Add Bill / Payment</button>
+    <button class="tab-btn" onclick="switchTab('history')">📋 History</button>
+    <button class="tab-btn" onclick="switchTab('send')">📲 Send Bill</button>
+    <button class="tab-btn" onclick="switchTab('info')">👤 Tenant Info</button>
+  </div>
+
+  <!-- BILLING TAB -->
+  <div class="tab-panel active" id="tab-billing">
+    <div class="card">
+      <h3>📅 Add Monthly Entry</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Month</label>
+          <input type="month" id="b_month">
+        </div>
+        <div class="form-group">
+          <label>Rent Amount (₹)</label>
+          <input type="number" id="b_rent" readonly>
+          <span class="hint">Fixed rent — auto-filled</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:0 0 100%;">
+          <label style="color:var(--red); font-size:15px;">⚡ Electricity Meter Reading</label>
+        </div>
+        <div class="form-group">
+          <label>Start Units</label>
+          <input type="number" id="b_unitStart" placeholder="Previous reading" readonly>
+          <span class="hint">Auto-filled from last entry</span>
+        </div>
+        <div class="form-group">
+          <label>Final Units (current reading)</label>
+          <input type="number" id="b_unitFinal" placeholder="Enter meter reading now">
+        </div>
+        <div class="form-group">
+          <label>Units Consumed</label>
+          <input type="number" id="b_unitConsumed" readonly>
+        </div>
+        <div class="form-group">
+          <label>Rate (₹/unit)</label>
+          <input type="number" id="b_elecRate" value="9">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Electricity Bill (₹)</label>
+          <input type="number" id="b_elecBill" readonly>
+          <span class="hint">Auto-calculated</span>
+        </div>
+        <div class="form-group">
+          <label>Last Outstanding (₹)</label>
+          <input type="number" id="b_lastOutstanding" readonly>
+          <span class="hint">Carried from previous month</span>
+        </div>
+        <div class="form-group">
+          <label>Total Due This Month (₹)</label>
+          <input type="number" id="b_totalDue" readonly style="font-weight:700; font-size:18px; color:var(--red);">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>💵 Amount Paid by Tenant (₹)</label>
+          <input type="number" id="b_paid" placeholder="Enter amount received" oninput="calcBilling()">
+        </div>
+        <div class="form-group">
+          <label>Payment Date</label>
+          <input type="date" id="b_payDate">
+        </div>
+        <div class="form-group">
+          <label>Mode of Payment</label>
+          <select id="b_payMode">
+            <option value="">Select…</option>
+            <option>Cash</option>
+            <option>Online Transfer</option>
+            <option>HDFC Bank</option>
+            <option>IDFC Bank</option>
+            <option>PhonePe</option>
+            <option>Google Pay</option>
+            <option>Paytm</option>
+            <option>Cheque</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Remaining Outstanding (₹)</label>
+          <input type="number" id="b_remaining" readonly style="font-weight:700; font-size:18px; color:var(--orange);">
+        </div>
+        <div class="form-group">
+          <label>Remarks (optional)</label>
+          <input type="text" id="b_remarks" placeholder="e.g. partial payment, advance…">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveBillingEntry()" style="margin-top:4px;">💾 Save Entry</button>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div class="tab-panel" id="tab-history">
+    <div class="card">
+      <h3>📋 Transaction History</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Month</th>
+            <th>Rent</th>
+            <th>Elec Bill</th>
+            <th>Total Due</th>
+            <th>Paid</th>
+            <th>Outstanding</th>
+            <th>Pay Date</th>
+            <th>Mode</th>
+            <th>Remarks</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="historyTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEND BILL TAB -->
+  <div class="tab-panel" id="tab-send">
+    <div class="card">
+      <h3>📲 Send Bill via WhatsApp</h3>
+      <div id="sendBillContent"></div>
+    </div>
+  </div>
+
+  <!-- INFO TAB -->
+  <div class="tab-panel" id="tab-info">
+    <div class="card">
+      <h3>👤 Tenant Details</h3>
+      <div id="tenantInfoForm"></div>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; align-items:center;">
+        <button class="btn btn-primary" onclick="saveTenantInfo()">💾 Save Changes</button>
+        <button class="btn btn-danger btn-sm" onclick="checkoutTenant()">🚪 Mark Checkout</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFlat()" style="background:#7b1c1c;">🗑 Delete This Flat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE ENTRY MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3>⚠️ Delete Entry?</h3>
+    <p style="font-size:15px; color:var(--gray);">This will permanently remove this billing entry. Are you sure?</p>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--border); color:#333;" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE FLAT MODAL -->
+<div class="modal-overlay" id="deleteFlatModal">
+  <div class="modal">
+    <h3>⚠️ Delete Flat?</h3>
+    <p style="font-size:15px; color:var(--gray);">This will <strong>permanently delete</strong> this flat and ALL its history. This cannot be undone. Are you sure?</p>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--border); color:#333;" onclick="closeModal('deleteFlatModal')">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeleteFlatBtn">Yes, Delete Flat</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// DATA LAYER — localStorage
+// ─────────────────────────────────────────────
+const STORE_KEY = 'jasmineResidency_v2';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { tenants: getDefaultTenants() };
+}
+
+function saveData(data) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+}
+
+let DB = loadData();
+
+function getDefaultTenants() {
+  // Pre-loaded from the Excel workbook
+  const list = [
+    { flat:'101', name:'Arjun',          rent:6000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'102', name:'Vikas',          rent:6000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'103', name:'Shahrukh',       rent:6000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'104', name:'Rahul',          rent:5000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'201', name:'Dhamendra',      rent:8000,  security:3000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'202', name:'Ankit Yadav',    rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'203', name:'Aditya',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'204', name:'Gaurav',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'205', name:'Aanchal',        rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'206', name:'Hemant',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'207', name:'Sushil Mohan',   rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'208', name:'Priyanka',       rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'209', name:'Durgesh',        rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'301', name:'Vikash',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'302', name:'Anoop',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'303', name:'Aman',           rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'304', name:'Arti',           rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'305', name:'Varun Negi',     rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'306', name:'Imran',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'307', name:'Rahul',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'308', name:'Pinki',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'309', name:'Renu',           rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'401', name:'Ankit Dubey',    rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'402', name:'Nishant',        rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'403', name:'Soni',           rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'404', name:'Praveen',        rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'405', name:'Gopal',          rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'406', name:'Ajay',           rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'407', name:'Varun',          rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'408', name:'Mukund',         rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'409', name:'Bijender',       rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'501', name:'Deepak',         rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'001', name:'Kamal',          rent:5000,  security:3000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'003', name:'Chandani',       rent:5000,  security:3000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'SHOP1', name:'Shop 1',       rent:3000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'SHOP2', name:'Shop 2',       rent:3000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    { flat:'SHOP3', name:'Shop 3',       rent:3000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+  ];
+  return list;
+}
+
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+let currentTenantIdx = null;
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const map = { home: 0, summary: 1, addTenant: 2, backup: 3 };
+  if (map[name] !== undefined) document.querySelectorAll('.nav-btn')[map[name]].classList.add('active');
+  if (name === 'home') renderHome();
+  if (name === 'summary') renderSummary();
+  if (name === 'backup') renderBackupInfo();
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'history') renderHistory();
+  if (name === 'info') renderTenantInfoForm();
+  if (name === 'send') renderSendBill();
+}
+
+// ─────────────────────────────────────────────
+// HOME SCREEN
+// ─────────────────────────────────────────────
+function renderHome() {
+  const q = (document.getElementById('searchBox').value || '').toLowerCase();
+  const grid = document.getElementById('homeGrid');
+  grid.innerHTML = '';
+
+  const floors = {};
+  DB.tenants.forEach((t, i) => {
+    if (q && !t.flat.toLowerCase().includes(q) && !t.name.toLowerCase().includes(q)) return;
+    const floor = getFloor(t.flat);
+    if (!floors[floor]) floors[floor] = [];
+    floors[floor].push({ t, i });
+  });
+
+  const floorOrder = Object.keys(floors).sort((a, b) => {
+    const na = parseInt(a) || 99, nb = parseInt(b) || 99;
+    return na - nb;
+  });
+
+  if (floorOrder.length === 0) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="es-icon">🔍</div>No flats found</div>';
+    return;
+  }
+
+  floorOrder.forEach(floor => {
+    const label = document.createElement('div');
+    label.style.cssText = 'grid-column:1/-1; font-size:15px; font-weight:700; color:var(--gray); margin-top:8px; margin-bottom:-4px;';
+    label.textContent = floor === 'G' ? 'Ground / Shops' : (floor === 'Other' ? 'Other Units' : floor + (floor==='1'?'st':floor==='2'?'nd':floor==='3'?'rd':'th') + ' Floor');
+    grid.appendChild(label);
+
+    floors[floor].forEach(({ t, i }) => {
+      const outstanding = getOutstanding(t);
+      let dueClass = 'ok', dueText = 'Clear';
+      if (outstanding > 0) { dueClass = 'due'; dueText = '₹' + fmt(outstanding) + ' due'; }
+      else if (outstanding < 0) { dueClass = 'partial'; dueText = 'Advance ₹' + fmt(-outstanding); }
+
+      const card = document.createElement('div');
+      card.className = 'flat-card' + (t.checkedOut ? ' checked-out' : '');
+      card.style.opacity = t.checkedOut ? '0.5' : '1';
+      card.innerHTML = `
+        <div class="flat-num">${t.flat}</div>
+        <div class="flat-name">${t.name}</div>
+        <div class="flat-due ${dueClass}">${dueText}</div>
+        ${t.checkedOut ? '<div style="font-size:11px;color:var(--red);margin-top:4px;">Checked Out</div>' : ''}
+      `;
+      card.onclick = () => openTenant(i);
+      grid.appendChild(card);
+    });
+  });
+}
+
+function getFloor(flat) {
+  const n = parseInt(flat);
+  if (isNaN(n)) return 'Other';
+  if (n < 100) return 'G';
+  return String(Math.floor(n / 100));
+}
+
+function getOutstanding(t) {
+  if (!t.entries || t.entries.length === 0) return 0;
+  return t.entries[t.entries.length - 1].outstanding || 0;
+}
+
+// ─────────────────────────────────────────────
+// TENANT DETAIL
+// ─────────────────────────────────────────────
+function openTenant(idx) {
+  currentTenantIdx = idx;
+  const t = DB.tenants[idx];
+  showScreen('tenant');
+
+  // Header
+  const outstanding = getOutstanding(t);
+  document.getElementById('tenantHeader').innerHTML = `
+    <div class="th-main">
+      <h2>Flat ${t.flat} — ${t.name}</h2>
+      <div class="th-meta">
+        Monthly Rent: <strong>₹${fmt(t.rent)}</strong>
+        ${t.mobile ? ' · 📞 ' + t.mobile : ''}
+        ${t.startDate ? ' · Since ' + fmtDate(t.startDate) : ''}
+      </div>
+    </div>
+    <div class="th-stats">
+      <div class="stat-box ${outstanding > 0 ? 'red' : 'green'}">
+        <div class="sb-label">Outstanding</div>
+        <div class="sb-val">₹${fmt(Math.abs(outstanding))}</div>
+      </div>
+      <div class="stat-box blue">
+        <div class="sb-label">Monthly Rent</div>
+        <div class="sb-val">₹${fmt(t.rent)}</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-label">Security</div>
+        <div class="sb-val">₹${fmt(t.security || 0)}</div>
+      </div>
+    </div>
+  `;
+
+  // Reset to billing tab
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+
+  // Pre-fill billing form
+  prefillBilling();
+}
+
+function prefillBilling() {
+  const t = DB.tenants[currentTenantIdx];
+  const now = new Date();
+  const monthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  document.getElementById('b_month').value = monthStr;
+  document.getElementById('b_rent').value = t.rent;
+  document.getElementById('b_payDate').value = toDateInput(now);
+  document.getElementById('b_paid').value = '';
+  document.getElementById('b_remarks').value = '';
+  document.getElementById('b_elecRate').value = t.elecRate || 9;
+
+  // Last meter reading
+  const lastMeter = getLastMeter(t);
+  document.getElementById('b_unitStart').value = lastMeter;
+  document.getElementById('b_unitFinal').value = '';
+  document.getElementById('b_unitConsumed').value = '';
+  document.getElementById('b_elecBill').value = '';
+
+  const outstanding = getOutstanding(t);
+  document.getElementById('b_lastOutstanding').value = outstanding;
+  document.getElementById('b_totalDue').value = t.rent + (outstanding > 0 ? outstanding : 0);
+  document.getElementById('b_remaining').value = '';
+}
+
+function getLastMeter(t) {
+  if (!t.entries || t.entries.length === 0) return t.lastMeter || 0;
+  for (let i = t.entries.length - 1; i >= 0; i--) {
+    if (t.entries[i].unitFinal) return t.entries[i].unitFinal;
+  }
+  return t.lastMeter || 0;
+}
+
+document.getElementById('b_unitFinal').addEventListener('input', calcBilling);
+document.getElementById('b_elecRate').addEventListener('input', calcBilling);
+document.getElementById('b_paid').addEventListener('input', calcBilling);
+
+function calcBilling() {
+  const t = DB.tenants[currentTenantIdx];
+  if (!t) return;
+
+  const unitStart = parseFloat(document.getElementById('b_unitStart').value) || 0;
+  const unitFinal = parseFloat(document.getElementById('b_unitFinal').value) || 0;
+  const rate = parseFloat(document.getElementById('b_elecRate').value) || 9;
+  const rent = parseFloat(document.getElementById('b_rent').value) || 0;
+  const lastOutstanding = parseFloat(document.getElementById('b_lastOutstanding').value) || 0;
+  const paid = parseFloat(document.getElementById('b_paid').value) || 0;
+
+  const consumed = Math.max(0, unitFinal - unitStart);
+  const elecBill = consumed * rate;
+  const totalDue = rent + elecBill + (lastOutstanding > 0 ? lastOutstanding : 0);
+  const remaining = totalDue - paid;
+
+  document.getElementById('b_unitConsumed').value = consumed || '';
+  document.getElementById('b_elecBill').value = elecBill || '';
+  document.getElementById('b_totalDue').value = totalDue;
+  document.getElementById('b_remaining').value = remaining;
+}
+
+function saveBillingEntry() {
+  const t = DB.tenants[currentTenantIdx];
+  const month = document.getElementById('b_month').value;
+  const rent = parseFloat(document.getElementById('b_rent').value) || 0;
+  const unitStart = parseFloat(document.getElementById('b_unitStart').value) || 0;
+  const unitFinal = parseFloat(document.getElementById('b_unitFinal').value) || 0;
+  const rate = parseFloat(document.getElementById('b_elecRate').value) || 9;
+  const paid = parseFloat(document.getElementById('b_paid').value) || 0;
+  const payDate = document.getElementById('b_payDate').value;
+  const payMode = document.getElementById('b_payMode').value;
+  const remarks = document.getElementById('b_remarks').value.trim();
+
+  if (!month) { toast('Please select a month', 'error'); return; }
+  if (!unitFinal && unitFinal !== 0) { toast('Please enter the final meter reading', 'error'); return; }
+  if (unitFinal < unitStart) { toast('Final meter reading cannot be less than start reading', 'error'); return; }
+
+  const consumed = unitFinal - unitStart;
+  const elecBill = consumed * rate;
+  const lastOutstanding = parseFloat(document.getElementById('b_lastOutstanding').value) || 0;
+  const totalDue = rent + elecBill + (lastOutstanding > 0 ? lastOutstanding : 0);
+  const outstanding = totalDue - paid;
+
+  const entry = {
+    id: Date.now(),
+    month,
+    rent,
+    unitStart,
+    unitFinal,
+    consumed,
+    rate,
+    elecBill,
+    lastOutstanding: lastOutstanding > 0 ? lastOutstanding : 0,
+    totalDue,
+    paid,
+    outstanding,
+    payDate,
+    payMode,
+    remarks
+  };
+
+  if (!t.entries) t.entries = [];
+  t.entries.push(entry);
+  t.elecRate = rate;
+  saveData(DB);
+
+  toast('Entry saved! Outstanding: ₹' + fmt(outstanding), outstanding > 0 ? 'error' : 'success');
+  openTenant(currentTenantIdx);
+}
+
+// ─────────────────────────────────────────────
+// HISTORY
+// ─────────────────────────────────────────────
+function renderHistory() {
+  const t = DB.tenants[currentTenantIdx];
+  const tbody = document.getElementById('historyTbody');
+  if (!t.entries || t.entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="es-icon">📋</div>No entries yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = [...t.entries].reverse().map(e => `
+    <tr>
+      <td><strong>${fmtMonth(e.month)}</strong></td>
+      <td>₹${fmt(e.rent)}</td>
+      <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.consumed} units × ₹${e.rate}</small></td>
+      <td>₹${fmt(e.totalDue)}</td>
+      <td>₹${fmt(e.paid)}</td>
+      <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : 'clear'}</span></td>
+      <td>${e.payDate ? fmtDate(e.payDate) : '—'}</td>
+      <td>${e.payMode || '—'}</td>
+      <td>${e.remarks || '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="confirmDelete(${e.id})">🗑</button></td>
+    </tr>
+  `).join('');
+}
+
+let pendingDeleteId = null;
+function confirmDelete(entryId) {
+  pendingDeleteId = entryId;
+  document.getElementById('confirmDeleteBtn').onclick = () => {
+    const t = DB.tenants[currentTenantIdx];
+    t.entries = t.entries.filter(e => e.id !== entryId);
+    saveData(DB);
+    closeModal('deleteModal');
+    renderHistory();
+    openTenant(currentTenantIdx);
+    toast('Entry deleted');
+  };
+  document.getElementById('deleteModal').classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// ─────────────────────────────────────────────
+// TENANT INFO FORM
+// ─────────────────────────────────────────────
+function renderTenantInfoForm() {
+  const t = DB.tenants[currentTenantIdx];
+  document.getElementById('tenantInfoForm').innerHTML = `
+    <div class="form-row">
+      <div class="form-group"><label>Flat Number</label><input type="text" id="ti_flat" value="${t.flat}"></div>
+      <div class="form-group"><label>Tenant Name</label><input type="text" id="ti_name" value="${t.name}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Monthly Rent (₹)</label><input type="number" id="ti_rent" value="${t.rent}"></div>
+      <div class="form-group"><label>Security Deposit (₹)</label><input type="number" id="ti_security" value="${t.security || ''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Mobile Number</label><input type="tel" id="ti_mobile" value="${t.mobile || ''}"></div>
+      <div class="form-group"><label>Rent Start Date</label><input type="date" id="ti_startDate" value="${t.startDate || ''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Address</label><input type="text" id="ti_address" value="${t.address || ''}"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="ti_email" value="${t.email || ''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ID Proof Type</label>
+        <select id="ti_idType">
+          ${['','Aadhaar Card','PAN Card','Passport','Voter ID','Driving Licence'].map(v => `<option ${t.idType===v?'selected':''}>${v}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>ID Proof Number</label><input type="text" id="ti_idNum" value="${t.idNum || ''}"></div>
+      <div class="form-group"><label>Date of Birth</label><input type="date" id="ti_dob" value="${t.dob || ''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Initial Meter Reading</label><input type="number" id="ti_lastMeter" value="${t.lastMeter || 0}"></div>
+      <div class="form-group"><label>Electricity Rate (₹/unit)</label><input type="number" id="ti_elecRate" value="${t.elecRate || 9}"></div>
+    </div>
+  `;
+}
+
+function saveTenantInfo() {
+  const t = DB.tenants[currentTenantIdx];
+  t.flat = document.getElementById('ti_flat').value.trim();
+  t.name = document.getElementById('ti_name').value.trim();
+  t.rent = parseFloat(document.getElementById('ti_rent').value) || t.rent;
+  t.security = parseFloat(document.getElementById('ti_security').value) || 0;
+  t.mobile = document.getElementById('ti_mobile').value.trim();
+  t.startDate = document.getElementById('ti_startDate').value;
+  t.address = document.getElementById('ti_address').value.trim();
+  t.email = document.getElementById('ti_email').value.trim();
+  t.idType = document.getElementById('ti_idType').value;
+  t.idNum = document.getElementById('ti_idNum').value.trim();
+  t.dob = document.getElementById('ti_dob').value;
+  t.lastMeter = parseFloat(document.getElementById('ti_lastMeter').value) || 0;
+  t.elecRate = parseFloat(document.getElementById('ti_elecRate').value) || 9;
+  saveData(DB);
+  toast('Tenant info saved!', 'success');
+  openTenant(currentTenantIdx);
+}
+
+function checkoutTenant() {
+  if (!confirm('Mark this tenant as checked out?')) return;
+  DB.tenants[currentTenantIdx].checkedOut = true;
+  saveData(DB);
+  toast('Tenant marked as checked out');
+  showScreen('home');
+}
+
+function deleteFlat() {
+  document.getElementById('confirmDeleteFlatBtn').onclick = () => {
+    DB.tenants.splice(currentTenantIdx, 1);
+    saveData(DB);
+    closeModal('deleteFlatModal');
+    toast('Flat deleted');
+    showScreen('home');
+  };
+  document.getElementById('deleteFlatModal').classList.add('open');
+}
+
+// ─────────────────────────────────────────────
+// SEND BILL (WhatsApp)
+// ─────────────────────────────────────────────
+function renderSendBill() {
+  const t = DB.tenants[currentTenantIdx];
+  const container = document.getElementById('sendBillContent');
+
+  if (!t.entries || t.entries.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="es-icon">📋</div>No billing entries yet.<br>Add a bill first from the "Add Bill / Payment" tab.</div>`;
+    return;
+  }
+
+  // Let user pick which entry to send
+  const entryOptions = [...t.entries].reverse().map((e, i) => {
+    const realIdx = t.entries.length - 1 - i;
+    return `<option value="${realIdx}" ${i === 0 ? 'selected' : ''}>${fmtMonth(e.month)}</option>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="form-row" style="margin-bottom:16px;">
+      <div class="form-group">
+        <label>Select Month to Send</label>
+        <select id="wa_entrySelect" onchange="updateWaPreview()" style="font-size:16px;">
+          ${entryOptions}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tenant Mobile Number</label>
+        <input type="tel" id="wa_mobile" value="${t.mobile || ''}" placeholder="10-digit number" oninput="updateWaPreview()">
+        <span class="hint">Used to open WhatsApp directly</span>
+      </div>
+    </div>
+    <label style="font-size:13px; font-weight:600; color:var(--gray); display:block; margin-bottom:6px;">Message Preview</label>
+    <div class="wa-box" id="wa_preview"></div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-whatsapp" onclick="openWhatsApp()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Open in WhatsApp
+      </button>
+      <button class="btn btn-copy" onclick="copyMessage()">📋 Copy Message</button>
+    </div>
+  `;
+  updateWaPreview();
+}
+
+function buildBillMessage(t, entry) {
+  const outstanding = entry.lastOutstanding || 0;
+  const outstandingText = outstanding > 0 ? '₹' + outstanding : 'Nil';
+  const amountToPay = entry.outstanding > 0 ? entry.outstanding : entry.totalDue;
+
+  return `Electricity Bill for month of ${fmtMonth(entry.month)}
+Name- ${t.name}
+Flat No =${t.flat}
+Last Outstanding=${outstandingText}
+Unit Start=${entry.unitStart}
+Unit Final=${entry.unitFinal}
+Total unit=${entry.consumed}
+Rate=${entry.rate}
+Billed Amount=${entry.elecBill}
+Rent=${entry.rent}
+Amount to Pay =₹${amountToPay}`;
+}
+
+function updateWaPreview() {
+  const t = DB.tenants[currentTenantIdx];
+  const idx = parseInt(document.getElementById('wa_entrySelect').value);
+  const entry = t.entries[idx];
+  const msg = buildBillMessage(t, entry);
+  document.getElementById('wa_preview').textContent = msg;
+}
+
+function openWhatsApp() {
+  const t = DB.tenants[currentTenantIdx];
+  const mobile = document.getElementById('wa_mobile').value.trim().replace(/\D/g, '');
+  const idx = parseInt(document.getElementById('wa_entrySelect').value);
+  const entry = t.entries[idx];
+  const msg = buildBillMessage(t, entry);
+
+  if (!mobile || mobile.length < 10) {
+    toast('Please enter a valid 10-digit mobile number', 'error');
+    return;
+  }
+
+  const number = mobile.length === 10 ? '91' + mobile : mobile;
+  const url = 'https://wa.me/' + number + '?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+
+function copyMessage() {
+  const t = DB.tenants[currentTenantIdx];
+  const idx = parseInt(document.getElementById('wa_entrySelect').value);
+  const entry = t.entries[idx];
+  const msg = buildBillMessage(t, entry);
+  navigator.clipboard.writeText(msg).then(() => {
+    toast('Message copied to clipboard!', 'success');
+  }).catch(() => {
+    // fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = msg;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('Message copied!', 'success');
+  });
+}
+
+// ─────────────────────────────────────────────
+// ADD TENANT
+// ─────────────────────────────────────────────
+function addTenant() {
+  const flat = document.getElementById('nt_flat').value.trim();
+  const name = document.getElementById('nt_name').value.trim();
+  const rent = parseFloat(document.getElementById('nt_rent').value) || 0;
+
+  if (!flat) { toast('Please enter a flat number', 'error'); return; }
+  if (!name) { toast('Please enter tenant name', 'error'); return; }
+  if (!rent) { toast('Please enter monthly rent', 'error'); return; }
+
+  const existing = DB.tenants.find(t => t.flat.toLowerCase() === flat.toLowerCase() && !t.checkedOut);
+  if (existing) { toast('Flat ' + flat + ' already has an active tenant!', 'error'); return; }
+
+  const tenant = {
+    flat,
+    name,
+    rent,
+    security: parseFloat(document.getElementById('nt_security').value) || 0,
+    mobile: document.getElementById('nt_mobile').value.trim(),
+    startDate: document.getElementById('nt_startDate').value,
+    address: document.getElementById('nt_address').value.trim(),
+    email: document.getElementById('nt_email').value.trim(),
+    idType: document.getElementById('nt_idType').value,
+    idNum: document.getElementById('nt_idNum').value.trim(),
+    dob: document.getElementById('nt_dob').value,
+    lastMeter: parseFloat(document.getElementById('nt_meterStart').value) || 0,
+    elecRate: parseFloat(document.getElementById('nt_elecRate').value) || 9,
+    entries: [],
+    checkedOut: false
+  };
+
+  DB.tenants.push(tenant);
+  saveData(DB);
+  toast('Tenant added: ' + name + ' (Flat ' + flat + ')', 'success');
+
+  // Clear form
+  ['nt_flat','nt_name','nt_rent','nt_security','nt_mobile','nt_startDate','nt_address','nt_email','nt_idNum','nt_dob','nt_meterStart'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('nt_elecRate').value = '9';
+  document.getElementById('nt_idType').value = '';
+
+  showScreen('home');
+}
+
+// ─────────────────────────────────────────────
+// SUMMARY
+// ─────────────────────────────────────────────
+function renderSummary() {
+  const active = DB.tenants.filter(t => !t.checkedOut);
+  const totalRent = active.reduce((s, t) => s + t.rent, 0);
+  const totalOutstanding = active.reduce((s, t) => s + Math.max(0, getOutstanding(t)), 0);
+  const totalSecurity = active.reduce((s, t) => s + (t.security || 0), 0);
+  const withDues = active.filter(t => getOutstanding(t) > 0).length;
+
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-card"><div class="sc-label">Active Tenants</div><div class="sc-val">${active.length}</div></div>
+    <div class="summary-card"><div class="sc-label">Monthly Rent Roll</div><div class="sc-val">₹${fmt(totalRent)}</div></div>
+    <div class="summary-card"><div class="sc-label">Total Outstanding</div><div class="sc-val" style="color:var(--red)">₹${fmt(totalOutstanding)}</div></div>
+    <div class="summary-card"><div class="sc-label">Security Held</div><div class="sc-val">₹${fmt(totalSecurity)}</div></div>
+    <div class="summary-card"><div class="sc-label">Flats with Dues</div><div class="sc-val" style="color:var(--orange)">${withDues}</div></div>
+  `;
+
+  const tbody = document.getElementById('duesTbody');
+  const withDuesList = active.filter(t => getOutstanding(t) > 0).sort((a, b) => getOutstanding(b) - getOutstanding(a));
+  if (withDuesList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--green);padding:20px;font-weight:700;">✅ All tenants are clear!</td></tr>';
+    return;
+  }
+  tbody.innerHTML = withDuesList.map(t => {
+    const out = getOutstanding(t);
+    const lastEntry = t.entries && t.entries.length ? t.entries[t.entries.length - 1] : null;
+    const rentDue = lastEntry ? Math.max(0, lastEntry.rent - lastEntry.paid) : 0;
+    const elecDue = lastEntry ? Math.max(0, lastEntry.elecBill - 0) : 0;
+    return `<tr>
+      <td><strong>${t.flat}</strong></td>
+      <td>${t.name}</td>
+      <td>₹${fmt(rentDue)}</td>
+      <td>₹${fmt(elecDue)}</td>
+      <td><strong style="color:var(--red)">₹${fmt(out)}</strong></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────
+function fmt(n) {
+  return Number(n || 0).toLocaleString('en-IN');
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtMonth(m) {
+  if (!m) return '';
+  const [y, mo] = m.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[parseInt(mo) - 1] + ' ' + y;
+}
+
+function toDateInput(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ─────────────────────────────────────────────
+// BACKUP — EXPORT & IMPORT
+// ─────────────────────────────────────────────
+function renderBackupInfo() {
+  const tenants = DB.tenants.filter(t => !t.checkedOut).length;
+  const totalEntries = DB.tenants.reduce((s, t) => s + (t.entries ? t.entries.length : 0), 0);
+  document.getElementById('exportInfo').textContent =
+    `Current data: ${tenants} active tenants · ${totalEntries} billing entries`;
+}
+
+function exportData() {
+  const now = new Date();
+  const dateStr = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+  const filename = 'JasmineResidency_Backup_' + dateStr + '.json';
+
+  const payload = JSON.stringify(DB, null, 2);
+  const blob = new Blob([payload], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  toast('Backup downloaded: ' + filename, 'success');
+  renderBackupInfo();
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('importStatus');
+  statusEl.textContent = 'Reading file…';
+  statusEl.style.color = 'var(--gray)';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+
+      // Basic validation
+      if (!parsed.tenants || !Array.isArray(parsed.tenants)) {
+        throw new Error('Invalid backup file — missing tenant data.');
+      }
+
+      const tenantCount = parsed.tenants.length;
+      const entryCount = parsed.tenants.reduce((s, t) => s + (t.entries ? t.entries.length : 0), 0);
+
+      if (!confirm(
+        `Restore backup?\n\n` +
+        `File contains: ${tenantCount} tenants, ${entryCount} billing entries.\n\n` +
+        `⚠️ This will REPLACE all current data. Are you sure?`
+      )) {
+        statusEl.textContent = 'Import cancelled.';
+        statusEl.style.color = 'var(--gray)';
+        event.target.value = '';
+        return;
+      }
+
+      DB = parsed;
+      saveData(DB);
+
+      statusEl.innerHTML = `✅ Restored successfully! ${tenantCount} tenants, ${entryCount} entries loaded.`;
+      statusEl.style.color = 'var(--green)';
+      toast('Data restored from backup!', 'success');
+      renderBackupInfo();
+    } catch(err) {
+      statusEl.innerHTML = '❌ Error: ' + err.message;
+      statusEl.style.color = 'var(--red)';
+      toast('Import failed — invalid file', 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// Header date
+document.getElementById('headerDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+// Init
+renderHome();
+</script>
+</body>
+</html>
