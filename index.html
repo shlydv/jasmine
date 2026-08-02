@@ -211,6 +211,7 @@
   .badge-green { background: var(--green-light); color: var(--green); }
   .badge-red { background: var(--red-light); color: var(--red); }
   .badge-orange { background: var(--orange-light); color: var(--orange); }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
 
   /* ── ADD TENANT ── */
   .add-tenant-btn {
@@ -380,7 +381,7 @@
     <div class="table-wrap">
       <table id="duesTable">
         <thead><tr>
-          <th>Flat</th><th>Tenant</th><th>Rent Due</th><th>Elec Due</th><th>Total Due</th>
+          <th>Flat</th><th>Tenant</th><th>Latest Rent</th><th>Latest EBill</th><th>Outstanding</th>
         </tr></thead>
         <tbody id="duesTbody"></tbody>
       </table>
@@ -679,7 +680,7 @@
 // ─────────────────────────────────────────────
 // DATA LAYER — localStorage
 // ─────────────────────────────────────────────
-const STORE_KEY = 'jasmineResidency_v2';
+const STORE_KEY = 'jasmineResidency_v3';
 
 function loadData() {
   try {
@@ -696,45 +697,45 @@ function saveData(data) {
 let DB = loadData();
 
 function getDefaultTenants() {
-  // Pre-loaded from the Excel workbook
+  // Current seed: Jul 2026 workbook summary. Sensitive identity/contact fields are intentionally not embedded.
   const list = [
-    { flat:'101', name:'Arjun',          rent:6000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'102', name:'Vikas',          rent:6000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'103', name:'Shahrukh',       rent:6000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'104', name:'Rahul',          rent:5000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'201', name:'Dhamendra',      rent:8000,  security:3000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'202', name:'Ankit Yadav',    rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'203', name:'Aditya',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'204', name:'Gaurav',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'205', name:'Aanchal',        rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'206', name:'Hemant',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'207', name:'Sushil Mohan',   rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'208', name:'Priyanka',       rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'209', name:'Durgesh',        rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'301', name:'Vikash',         rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'302', name:'Anoop',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'303', name:'Aman',           rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'304', name:'Arti',           rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'305', name:'Varun Negi',     rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'306', name:'Imran',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'307', name:'Rahul',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'308', name:'Pinki',          rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'309', name:'Renu',           rent:7000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'401', name:'Ankit Dubey',    rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'402', name:'Nishant',        rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'403', name:'Soni',           rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'404', name:'Praveen',        rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'405', name:'Gopal',          rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'406', name:'Ajay',           rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'407', name:'Varun',          rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'408', name:'Mukund',         rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'409', name:'Bijender',       rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'501', name:'Deepak',         rent:7500,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'001', name:'Kamal',          rent:5000,  security:3000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'003', name:'Chandani',       rent:5000,  security:3000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'SHOP1', name:'Shop 1',       rent:3000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'SHOP2', name:'Shop 2',       rent:3000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
-    { flat:'SHOP3', name:'Shop 3',       rent:3000,  security:5000, elecRate:9, mobile:'', address:'', email:'', idType:'', idNum:'', dob:'', startDate:'', lastMeter:0, entries:[], checkedOut:false },
+    {"flat":"101","name":"Arjun Singh","rent":6200.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-07-01","lastMeter":1514.0,"entries":[{"id":2026070001,"month":"2026-07","rent":6200.0,"unitStart":1464.0,"unitFinal":1514.0,"consumed":50,"rate":9.0,"elecBill":452.0,"lastOutstanding":0,"totalDue":6652.0,"paid":7000.0,"outstanding":-348.0,"payDate":"2026-07-09","payMode":"","remarks":"Paid 7000/-  Cash Sunita; Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":450,"source":"Jul 2026 sheet: row 2"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":2,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"102","name":"Ajay","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-04-01","lastMeter":5838.0,"entries":[{"id":2026070002,"month":"2026-07","rent":8000.0,"unitStart":5723.0,"unitFinal":5838.0,"consumed":115,"rate":9.0,"elecBill":1262.0,"lastOutstanding":0,"totalDue":9262.0,"paid":9000.0,"outstanding":262.0,"payDate":"2026-07-21","payMode":"","remarks":"Paid 9000/-  Cash Ajit; Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":1035,"source":"Jul 2026 sheet: row 3"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":3,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"103","name":"Raman/Anil","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-10-28","lastMeter":2154.0,"entries":[{"id":2026070003,"month":"2026-07","rent":8000.0,"unitStart":2145.0,"unitFinal":2154.0,"consumed":9,"rate":9.0,"elecBill":81.0,"lastOutstanding":0,"totalDue":8081.0,"paid":8100.0,"outstanding":-19.0,"payDate":"2026-07-07","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":81,"source":"Jul 2026 sheet: row 4"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":4,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"104","name":"Hall Rahul","rent":30000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":4997.0,"entries":[{"id":2026070004,"month":"2026-07","rent":30000.0,"unitStart":4978.0,"unitFinal":4997.0,"consumed":19,"rate":9.0,"elecBill":21098.0,"lastOutstanding":0,"totalDue":51098.0,"paid":51098,"outstanding":0.0,"payDate":"2026-07-06","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":171,"source":"Jul 2026 sheet: row 36"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":36,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"201","name":"Paul","rent":8000.0,"security":3000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-05-10","lastMeter":3203.0,"entries":[{"id":2026070005,"month":"2026-07","rent":8000.0,"unitStart":2993.0,"unitFinal":3203.0,"consumed":210,"rate":9.0,"elecBill":5887.0,"lastOutstanding":0,"totalDue":13887.0,"paid":10000.0,"outstanding":3887.0,"payDate":"2026-07-09","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":1890,"source":"Jul 2026 sheet: row 5"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":5,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"202","name":"Ankit Yadav","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-12-06","lastMeter":2978.0,"entries":[{"id":2026070006,"month":"2026-07","rent":8000.0,"unitStart":2895.0,"unitFinal":2978.0,"consumed":83,"rate":9.0,"elecBill":2205.0,"lastOutstanding":0,"totalDue":10205.0,"paid":10000.0,"outstanding":205.0,"payDate":"2026-07-17","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":747,"source":"Jul 2026 sheet: row 6"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":6,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"203","name":"Aditya","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-10-30","lastMeter":4101.0,"entries":[{"id":2026070007,"month":"2026-07","rent":8000.0,"unitStart":4013.0,"unitFinal":4101.0,"consumed":88,"rate":9.0,"elecBill":867.0,"lastOutstanding":0,"totalDue":8867.0,"paid":9000.0,"outstanding":-133.0,"payDate":"2026-07-06","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":792,"source":"Jul 2026 sheet: row 7"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":7,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"204","name":"Gourav","rent":7000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-03-15","lastMeter":2166,"entries":[{"id":2026070008,"month":"2026-07","rent":7000.0,"unitStart":2127,"unitFinal":2166,"consumed":39,"rate":9.0,"elecBill":351.0,"lastOutstanding":0,"totalDue":7351.0,"paid":7351.0,"outstanding":0.0,"payDate":"2026-07-06","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":351,"source":"Jul 2026 sheet: row 8"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":8,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"205","name":"Smritiparna","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-12-17","lastMeter":5963.0,"entries":[{"id":2026070009,"month":"2026-07","rent":8000.0,"unitStart":5652.0,"unitFinal":5963.0,"consumed":311,"rate":9.0,"elecBill":2521.0,"lastOutstanding":0,"totalDue":10521.0,"paid":10000.0,"outstanding":521.0,"payDate":"2026-07-18","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":2799,"source":"Jul 2026 sheet: row 9"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":9,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"206","name":"Anishka","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":1959.0,"entries":[{"id":2026070010,"month":"2026-07","rent":7500.0,"unitStart":1924.0,"unitFinal":1959.0,"consumed":35,"rate":9.0,"elecBill":315.0,"lastOutstanding":0,"totalDue":7815.0,"paid":7500.0,"outstanding":315.0,"payDate":"2026-07-12","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":315,"source":"Jul 2026 sheet: row 10"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":10,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"207","name":"Sagar","rent":7000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-05-18","lastMeter":3627.0,"entries":[{"id":2026070011,"month":"2026-07","rent":7000.0,"unitStart":3441.0,"unitFinal":3627.0,"consumed":186,"rate":9.0,"elecBill":2390.0,"lastOutstanding":0,"totalDue":9390.0,"paid":9000.0,"outstanding":390.0,"payDate":"2026-07-02","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":1674,"source":"Jul 2026 sheet: row 11"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":11,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"208","name":"Sandeep","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-10-16","lastMeter":2078.0,"entries":[{"id":2026070012,"month":"2026-07","rent":7500.0,"unitStart":2017.0,"unitFinal":2078.0,"consumed":61,"rate":9.0,"elecBill":549.0,"lastOutstanding":0,"totalDue":8049.0,"paid":7500.0,"outstanding":549.0,"payDate":"2026-07-06","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":549,"source":"Jul 2026 sheet: row 12"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":12,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"209","name":"Renu","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-01-06","lastMeter":5593.0,"entries":[{"id":2026070013,"month":"2026-07","rent":7500.0,"unitStart":5368.0,"unitFinal":5593.0,"consumed":225,"rate":9.0,"elecBill":1830.0,"lastOutstanding":0,"totalDue":9330.0,"paid":9500.0,"outstanding":-170.0,"payDate":"2026-07-03","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":2025,"source":"Jul 2026 sheet: row 13"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":13,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"301","name":"Smritiparna Datta","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-06-05","lastMeter":6944.0,"entries":[{"id":2026070014,"month":"2026-07","rent":8000.0,"unitStart":6872.0,"unitFinal":6944.0,"consumed":72,"rate":9.0,"elecBill":882.0,"lastOutstanding":0,"totalDue":8882.0,"paid":8700.0,"outstanding":182.0,"payDate":"2026-07-09","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":648,"source":"Jul 2026 sheet: row 14"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":14,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"302","name":"Khushal Thakur","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-11-15","lastMeter":1253.0,"entries":[{"id":2026070015,"month":"2026-07","rent":7500.0,"unitStart":1181.0,"unitFinal":1253.0,"consumed":72,"rate":9.0,"elecBill":1103.0,"lastOutstanding":0,"totalDue":8603.0,"paid":16110.0,"outstanding":-7507.0,"payDate":"2026-07-11","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":648,"source":"Jul 2026 sheet: row 15"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":15,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"303","name":"Akash Mishra","rent":9500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-09-05","lastMeter":9966.0,"entries":[{"id":2026070016,"month":"2026-07","rent":9500.0,"unitStart":9461.0,"unitFinal":9966.0,"consumed":505,"rate":9.0,"elecBill":5470.0,"lastOutstanding":0,"totalDue":14970.0,"paid":0,"outstanding":14970.0,"payDate":"","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":4545,"source":"Jul 2026 sheet: row 16"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":16,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"304","name":"Arti","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-04-06","lastMeter":6706.0,"entries":[{"id":2026070017,"month":"2026-07","rent":8000.0,"unitStart":6465.0,"unitFinal":6706.0,"consumed":241,"rate":9.0,"elecBill":2169.0,"lastOutstanding":0,"totalDue":10169.0,"paid":9000.0,"outstanding":1169.0,"payDate":"2026-07-21","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":2169,"source":"Jul 2026 sheet: row 17"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":17,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"305","name":"Prachi","rent":7000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-09-01","lastMeter":4390.0,"entries":[{"id":2026070018,"month":"2026-07","rent":7000.0,"unitStart":4285.0,"unitFinal":4390.0,"consumed":105,"rate":9.0,"elecBill":1020.0,"lastOutstanding":0,"totalDue":8020.0,"paid":8010.0,"outstanding":10.0,"payDate":"2026-07-04","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":945,"source":"Jul 2026 sheet: row 18"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":18,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"306","name":"Imran","rent":7200.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-07-01","lastMeter":3965.0,"entries":[{"id":2026070019,"month":"2026-07","rent":7200.0,"unitStart":3866.0,"unitFinal":3965.0,"consumed":99,"rate":9.0,"elecBill":855.0,"lastOutstanding":0,"totalDue":8055.0,"paid":8055.0,"outstanding":0.0,"payDate":"2026-07-17","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":891,"source":"Jul 2026 sheet: row 19"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":19,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"307","name":"Ravi","rent":7700.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-01-01","lastMeter":6207.0,"entries":[{"id":2026070020,"month":"2026-07","rent":7700.0,"unitStart":5674.0,"unitFinal":6207.0,"consumed":533,"rate":9.0,"elecBill":4819.0,"lastOutstanding":0,"totalDue":12519.0,"paid":12820.0,"outstanding":-301.0,"payDate":"2026-07-14","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":4797,"source":"Jul 2026 sheet: row 20"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":20,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"308","name":"Pinki","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-03-01","lastMeter":4707,"entries":[{"id":2026070021,"month":"2026-07","rent":8000.0,"unitStart":4656,"unitFinal":4707,"consumed":51,"rate":9.0,"elecBill":459.0,"lastOutstanding":0,"totalDue":8459.0,"paid":8000.0,"outstanding":459.0,"payDate":"2026-07-03","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":459,"source":"Jul 2026 sheet: row 21"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":21,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"309","name":"Yogesh","rent":8500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-01-15","lastMeter":5175.0,"entries":[{"id":2026070022,"month":"2026-07","rent":8500.0,"unitStart":4983.0,"unitFinal":5175.0,"consumed":192,"rate":9.0,"elecBill":1724.0,"lastOutstanding":0,"totalDue":10224.0,"paid":10300.0,"outstanding":-76.0,"payDate":"2026-07-07","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":1728,"source":"Jul 2026 sheet: row 22"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":22,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"401","name":"Ankit Dubey","rent":8000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-04-07","lastMeter":4385.0,"entries":[{"id":2026070023,"month":"2026-07","rent":8000.0,"unitStart":4271.0,"unitFinal":4385.0,"consumed":114,"rate":9.0,"elecBill":1435.0,"lastOutstanding":0,"totalDue":9435.0,"paid":9450.0,"outstanding":-15.0,"payDate":"2026-07-16","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":1026,"source":"Jul 2026 sheet: row 23"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":23,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"402","name":"Nishant","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-05-11","lastMeter":822.0,"entries":[{"id":2026070024,"month":"2026-07","rent":7500.0,"unitStart":430.0,"unitFinal":822.0,"consumed":392,"rate":9.0,"elecBill":3528.0,"lastOutstanding":0,"totalDue":11028.0,"paid":0,"outstanding":11028.0,"payDate":"","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":3528,"source":"Jul 2026 sheet: row 24"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":24,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"403","name":"Vivek","rent":8200.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-05-07","lastMeter":9422.0,"entries":[{"id":2026070025,"month":"2026-07","rent":8200.0,"unitStart":9334.0,"unitFinal":9422.0,"consumed":88,"rate":9.0,"elecBill":840.0,"lastOutstanding":0,"totalDue":9040.0,"paid":9000.0,"outstanding":40.0,"payDate":"2026-07-10","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":792,"source":"Jul 2026 sheet: row 25"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":25,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"404","name":"Praveen","rent":7200.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-01-05","lastMeter":7010.0,"entries":[{"id":2026070026,"month":"2026-07","rent":7200.0,"unitStart":6745.0,"unitFinal":7010.0,"consumed":265,"rate":9.0,"elecBill":2363.0,"lastOutstanding":0,"totalDue":9563.0,"paid":9600.0,"outstanding":-37.0,"payDate":"2026-07-13","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":2385,"source":"Jul 2026 sheet: row 26"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":26,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"405","name":"Gopal","rent":7000.0,"security":5000,"elecRate":7.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2025-01-10","lastMeter":8419.0,"entries":[{"id":2026070027,"month":"2026-07","rent":7000.0,"unitStart":7932.0,"unitFinal":8419.0,"consumed":487,"rate":7.0,"elecBill":3394.0,"lastOutstanding":0,"totalDue":10394.0,"paid":0,"outstanding":10394.0,"payDate":"","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":3409,"source":"Jul 2026 sheet: row 27"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":27,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"406","name":"Jyotiroop","rent":8500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-02-02","lastMeter":6666.0,"entries":[{"id":2026070028,"month":"2026-07","rent":8500.0,"unitStart":6410.0,"unitFinal":6666.0,"consumed":256,"rate":9.0,"elecBill":5070.0,"lastOutstanding":0,"totalDue":13570.0,"paid":11000.0,"outstanding":2570.0,"payDate":"2026-07-02","payMode":"","remarks":"HDFC; Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":2304,"source":"Jul 2026 sheet: row 28"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":28,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"407","name":"Jyoti","rent":9000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-07-01","lastMeter":6381.0,"entries":[{"id":2026070029,"month":"2026-07","rent":9000.0,"unitStart":6381.0,"unitFinal":6381.0,"consumed":0,"rate":9.0,"elecBill":0,"lastOutstanding":0,"totalDue":9000.0,"paid":9000.0,"outstanding":0.0,"payDate":"2026-07-03","payMode":"","remarks":"Cash Sunita; Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":0,"source":"Jul 2026 sheet: row 29"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":29,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"408","name":"Akshita","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2024-06-05","lastMeter":5125.0,"entries":[{"id":2026070030,"month":"2026-07","rent":7500.0,"unitStart":5032.0,"unitFinal":5125.0,"consumed":93,"rate":9.0,"elecBill":837.0,"lastOutstanding":0,"totalDue":8337.0,"paid":8337.0,"outstanding":0.0,"payDate":"2026-07-01","payMode":"","remarks":"HDFC/Pramod; Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":837,"source":"Jul 2026 sheet: row 30"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":30,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"409","name":"Lalit","rent":7500.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-02-14","lastMeter":5725.0,"entries":[{"id":2026070031,"month":"2026-07","rent":7500.0,"unitStart":5463.0,"unitFinal":5725.0,"consumed":262,"rate":9.0,"elecBill":2358.0,"lastOutstanding":0,"totalDue":9858.0,"paid":9860.0,"outstanding":-2.0,"payDate":"2026-07-21","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":2358,"source":"Jul 2026 sheet: row 31"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":31,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"501","name":"Neeraj","rent":5000.0,"security":5000,"elecRate":9.0,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"2026-02-14","lastMeter":852.0,"entries":[{"id":2026070032,"month":"2026-07","rent":5000.0,"unitStart":774.0,"unitFinal":852.0,"consumed":78,"rate":9.0,"elecBill":1402.0,"lastOutstanding":0,"totalDue":6402.0,"paid":5770.0,"outstanding":632.0,"payDate":"2026-07-16","payMode":"","remarks":"Jul 2026 summary; Jun 2026 EBill","ebillMonth":"2026-06","meterBill":702,"source":"Jul 2026 sheet: row 32"}],"checkedOut":false,"sourcePeriod":"Jul 2026","sourceRow":32,"sourceFile":"1. 1 Apr 2026 Rent Jasmine Residency 2025_2026.xlsx"},
+    {"flat":"001","name":"Kamal","rent":5000,"security":3000,"elecRate":9,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":0,"entries":[],"checkedOut":false},
+    {"flat":"003","name":"Chandani","rent":5000,"security":3000,"elecRate":9,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":0,"entries":[],"checkedOut":false},
+    {"flat":"SHOP1","name":"Shop 1","rent":3000,"security":5000,"elecRate":9,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":0,"entries":[],"checkedOut":false},
+    {"flat":"SHOP2","name":"Shop 2","rent":3000,"security":5000,"elecRate":9,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":0,"entries":[],"checkedOut":false},
+    {"flat":"SHOP3","name":"Shop 3","rent":3000,"security":5000,"elecRate":9,"mobile":"","address":"","email":"","idType":"","idNum":"","dob":"","startDate":"","lastMeter":0,"entries":[],"checkedOut":false},
   ];
   return list;
 }
@@ -840,6 +841,8 @@ function openTenant(idx) {
 
   // Header
   const outstanding = getOutstanding(t);
+  const balanceClass = outstanding > 0 ? 'red' : outstanding < 0 ? 'blue' : 'green';
+  const balanceLabel = outstanding > 0 ? 'Outstanding' : outstanding < 0 ? 'Credit' : 'Clear';
   document.getElementById('tenantHeader').innerHTML = `
     <div class="th-main">
       <h2>Flat ${t.flat} — ${t.name}</h2>
@@ -850,8 +853,8 @@ function openTenant(idx) {
       </div>
     </div>
     <div class="th-stats">
-      <div class="stat-box ${outstanding > 0 ? 'red' : 'green'}">
-        <div class="sb-label">Outstanding</div>
+      <div class="stat-box ${balanceClass}">
+        <div class="sb-label">${balanceLabel}</div>
         <div class="sb-val">₹${fmt(Math.abs(outstanding))}</div>
       </div>
       <div class="stat-box blue">
@@ -893,7 +896,7 @@ function prefillBilling() {
 
   const outstanding = getOutstanding(t);
   document.getElementById('b_lastOutstanding').value = outstanding;
-  document.getElementById('b_totalDue').value = t.rent + (outstanding > 0 ? outstanding : 0);
+  document.getElementById('b_totalDue').value = t.rent + outstanding;
   document.getElementById('b_remaining').value = '';
 }
 
@@ -922,7 +925,7 @@ function calcBilling() {
 
   const consumed = Math.max(0, unitFinal - unitStart);
   const elecBill = consumed * rate;
-  const totalDue = rent + elecBill + (lastOutstanding > 0 ? lastOutstanding : 0);
+  const totalDue = rent + elecBill + lastOutstanding;
   const remaining = totalDue - paid;
 
   document.getElementById('b_unitConsumed').value = consumed || '';
@@ -950,7 +953,7 @@ function saveBillingEntry() {
   const consumed = unitFinal - unitStart;
   const elecBill = consumed * rate;
   const lastOutstanding = parseFloat(document.getElementById('b_lastOutstanding').value) || 0;
-  const totalDue = rent + elecBill + (lastOutstanding > 0 ? lastOutstanding : 0);
+  const totalDue = rent + elecBill + lastOutstanding;
   const outstanding = totalDue - paid;
 
   const entry = {
@@ -962,7 +965,7 @@ function saveBillingEntry() {
     consumed,
     rate,
     elecBill,
-    lastOutstanding: lastOutstanding > 0 ? lastOutstanding : 0,
+    lastOutstanding,
     totalDue,
     paid,
     outstanding,
@@ -976,7 +979,12 @@ function saveBillingEntry() {
   t.elecRate = rate;
   saveData(DB);
 
-  toast('Entry saved! Outstanding: ₹' + fmt(outstanding), outstanding > 0 ? 'error' : 'success');
+  const balanceMessage = outstanding > 0
+    ? 'Outstanding: ₹' + fmt(outstanding)
+    : outstanding < 0
+      ? 'Credit: ₹' + fmt(Math.abs(outstanding))
+      : 'Balance clear';
+  toast('Entry saved! ' + balanceMessage, outstanding > 0 ? 'error' : 'success');
   openTenant(currentTenantIdx);
 }
 
@@ -994,10 +1002,10 @@ function renderHistory() {
     <tr>
       <td><strong>${fmtMonth(e.month)}</strong></td>
       <td>₹${fmt(e.rent)}</td>
-      <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.consumed} units × ₹${e.rate}</small></td>
+      <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.consumed} units × ₹${e.rate}${e.meterBill != null && e.meterBill !== e.elecBill ? ` · meter ₹${fmt(e.meterBill)}` : ''}</small></td>
       <td>₹${fmt(e.totalDue)}</td>
       <td>₹${fmt(e.paid)}</td>
-      <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : 'clear'}</span></td>
+      <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : e.outstanding < 0 ? 'badge-blue' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : e.outstanding < 0 ? 'credit' : 'clear'}</span></td>
       <td>${e.payDate ? fmtDate(e.payDate) : '—'}</td>
       <td>${e.payMode || '—'}</td>
       <td>${e.remarks || '—'}</td>
@@ -1149,20 +1157,23 @@ function renderSendBill() {
 
 function buildBillMessage(t, entry) {
   const outstanding = entry.lastOutstanding || 0;
-  const outstandingText = outstanding > 0 ? '₹' + outstanding : 'Nil';
-  const amountToPay = entry.outstanding > 0 ? entry.outstanding : entry.totalDue;
+  const outstandingText = outstanding > 0 ? '₹' + outstanding + ' due' : outstanding < 0 ? '₹' + Math.abs(outstanding) + ' credit' : 'Nil';
+  const amountToPay = entry.outstanding > 0 ? entry.outstanding : 0;
+  const balanceText = entry.outstanding < 0 ? 'Credit =₹' + Math.abs(entry.outstanding) : 'Amount to Pay =₹' + amountToPay;
+  const electricityMonth = entry.ebillMonth || entry.month;
 
-  return `Electricity Bill for month of ${fmtMonth(entry.month)}
+  return `Electricity Bill for month of ${fmtMonth(electricityMonth)}
 Name- ${t.name}
 Flat No =${t.flat}
+Rent Month=${fmtMonth(entry.month)}
 Last Outstanding=${outstandingText}
 Unit Start=${entry.unitStart}
 Unit Final=${entry.unitFinal}
 Total unit=${entry.consumed}
 Rate=${entry.rate}
-Billed Amount=${entry.elecBill}
+${entry.meterBill != null && entry.meterBill !== entry.elecBill ? 'Meter Bill=' + entry.meterBill + '\n' : ''}Billed Amount=${entry.elecBill}
 Rent=${entry.rent}
-Amount to Pay =₹${amountToPay}`;
+${balanceText}`;
 }
 
 function updateWaPreview() {
@@ -1283,8 +1294,8 @@ function renderSummary() {
   tbody.innerHTML = withDuesList.map(t => {
     const out = getOutstanding(t);
     const lastEntry = t.entries && t.entries.length ? t.entries[t.entries.length - 1] : null;
-    const rentDue = lastEntry ? Math.max(0, lastEntry.rent - lastEntry.paid) : 0;
-    const elecDue = lastEntry ? Math.max(0, lastEntry.elecBill - 0) : 0;
+    const rentDue = lastEntry ? lastEntry.rent : 0;
+    const elecDue = lastEntry ? lastEntry.elecBill : 0;
     return `<tr>
       <td><strong>${t.flat}</strong></td>
       <td>${t.name}</td>
