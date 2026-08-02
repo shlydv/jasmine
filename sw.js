@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jasmine-residency-shell-v1';
+const CACHE_NAME = 'jasmine-residency-shell-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -24,6 +24,14 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+
+  // Cloud data must always be fresh and must carry the browser's Access cookie.
+  // Never cache the D1 API response in the offline shell cache.
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.pathname.includes('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   if (event.request.mode === 'navigate') {
     event.respondWith(

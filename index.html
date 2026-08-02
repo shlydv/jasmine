@@ -445,8 +445,15 @@
   <div class="card" style="background:#f4f0ff; border:2px solid #c4b5fd;">
     <h3 style="color:#6d28d9;">☁️ Cloud backup / access anywhere</h3>
     <p style="color:var(--gray); font-size:14px; line-height:1.6;">
-      Automatic multi-device sync is not enabled yet. For now, download this JSON and place it in a Google Drive folder; it is the complete backup and can be restored on another device. A secure cloud database still needs a Google Drive/Sheets or Cloudflare D1 account connection and sign-in protection.
+      Your data remains available offline in this browser and synchronizes to Cloudflare D1 when the site is configured and you are signed in with Cloudflare Access. The cloud copy is protected by login and is used on other devices.
     </p>
+    <div id="cloudSyncStatus" style="margin:12px 0; font-size:14px; font-weight:600; color:var(--gray);">Cloud sync: checking…</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-primary" type="button" onclick="syncCloudData(true)">☁️ Sync now</button>
+      <button class="btn" id="useCloudBtn" type="button" style="display:none; background:#e0e7ff; color:#3730a3;" onclick="useCloudCopy()">Use cloud copy</button>
+      <button class="btn" id="pushLocalBtn" type="button" style="display:none; background:#fef3c7; color:#92400e;" onclick="pushLocalCopy()">Keep this device’s copy</button>
+    </div>
+    <div id="cloudSyncDetail" style="margin-top:10px; font-size:13px; color:var(--gray);"></div>
   </div>
 </div>
 
@@ -714,6 +721,63 @@
 // ─────────────────────────────────────────────
 const STORE_KEY = 'jasmineResidency_v4';
 const LEGACY_STORE_KEYS = ['jasmineResidency_v3', 'jasmineResidency_v2'];
+const CLOUD_API = './api/data';
+const CLOUD_META_KEY = 'jasmineResidency_cloudMeta_v1';
+let cloudSyncTimer = null;
+let cloudSyncInProgress = false;
+let cloudSyncStarted = false;
+let cloudSyncState = 'not_checked';
+let cloudSyncMessage = 'Cloud sync has not checked this device yet.';
+
+function readCloudMeta() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CLOUD_META_KEY) || '{}');
+    return {
+      version: Number.isInteger(parsed.version) ? parsed.version : 0,
+      dirty: parsed.dirty === true,
+      lastSyncAt: Number(parsed.lastSyncAt) || 0
+    };
+  } catch (error) {
+    return { version: 0, dirty: false, lastSyncAt: 0 };
+  }
+}
+
+function writeCloudMeta(meta) {
+  localStorage.setItem(CLOUD_META_KEY, JSON.stringify(meta));
+}
+
+function setCloudSyncState(state, message) {
+  cloudSyncState = state;
+  cloudSyncMessage = message || '';
+  const status = document.getElementById('cloudSyncStatus');
+  const detail = document.getElementById('cloudSyncDetail');
+  const useCloudBtn = document.getElementById('useCloudBtn');
+  const pushLocalBtn = document.getElementById('pushLocalBtn');
+  if (status) {
+    const labels = {
+      connected: 'Cloud sync: connected',
+      syncing: 'Cloud sync: saving…',
+      checking: 'Cloud sync: checking…',
+      offline: 'Cloud sync: offline',
+      auth: 'Cloud sync: sign-in required',
+      unavailable: 'Cloud sync: setup incomplete',
+      conflict: 'Cloud sync: conflict needs review',
+      error: 'Cloud sync: temporarily unavailable',
+      not_checked: 'Cloud sync: not checked'
+    };
+    status.textContent = labels[state] || 'Cloud sync: ' + state;
+    status.style.color = state === 'connected' ? 'var(--green)' : state === 'conflict' || state === 'auth' ? 'var(--orange)' : 'var(--gray)';
+  }
+  if (detail) detail.textContent = cloudSyncMessage;
+  if (useCloudBtn) useCloudBtn.style.display = state === 'conflict' ? 'inline-block' : 'none';
+  if (pushLocalBtn) pushLocalBtn.style.display = state === 'conflict' ? 'inline-block' : 'none';
+}
+
+function queueCloudSave() {
+  if (!cloudSyncStarted || cloudSyncState === 'auth' || cloudSyncState === 'unavailable' || !navigator.onLine) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => pushCloudData(readCloudMeta().version), 800);
+}
 
 function loadData() {
   try {
@@ -732,9 +796,15 @@ function loadData() {
   return seedData();
 }
 
-function saveData(data) {
+function saveData(data, options = {}) {
   data.schemaVersion = 4;
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  if (!options.skipCloud) {
+    const meta = readCloudMeta();
+    meta.dirty = true;
+    writeCloudMeta(meta);
+    queueCloudSave();
+  }
 }
 
 function normalizeData(data) {
@@ -1498,6 +1568,7 @@ function renderBackupInfo() {
   const totalEntries = DB.tenants.reduce((s, t) => s + (t.entries ? t.entries.length : 0), 0);
   document.getElementById('exportInfo').textContent =
     `Current data: ${tenants} active tenants · ${totalEntries} billing entries`;
+  setCloudSyncState(cloudSyncState, cloudSyncMessage);
 }
 
 function exportData() {
@@ -1570,6 +1641,136 @@ function importData(event) {
   reader.readAsText(file);
 }
 
+async function readCloudResponse(response) {
+  let body = null;
+  try { body = await response.json(); } catch (error) {}
+  if (response.ok) return body || {};
+  const message = body && body.error ? body.error : `Cloud API returned ${response.status}`;
+  const error = new Error(message);
+  error.status = response.status;
+  error.body = body;
+  throw error;
+}
+
+async function fetchCloudData() {
+  const response = await fetch(CLOUD_API, {
+    method: 'GET',
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { accept: 'application/json' }
+  });
+  return readCloudResponse(response);
+}
+
+function handleCloudError(error) {
+  if (error && error.status === 401) {
+    setCloudSyncState('auth', 'Open the website through the Cloudflare Access login, then tap Sync now.');
+  } else if (error && (error.status === 404 || error.status === 503)) {
+    setCloudSyncState('unavailable', error.message || 'Create/bind the D1 database and apply schema.sql first.');
+  } else if (!navigator.onLine) {
+    setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
+  } else {
+    setCloudSyncState('error', error && error.message ? error.message : 'Try Sync now again.');
+  }
+  renderBackupInfo();
+}
+
+async function pushCloudData(expectedVersion, options = {}) {
+  if (cloudSyncInProgress || !navigator.onLine || location.protocol === 'file:') return false;
+  cloudSyncInProgress = true;
+  setCloudSyncState('syncing', 'Uploading the latest local copy…');
+  try {
+    const response = await fetch(CLOUD_API, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ data: DB, expectedVersion })
+    });
+    const result = await readCloudResponse(response);
+    writeCloudMeta({ version: Number(result.version) || 0, dirty: false, lastSyncAt: Date.now() });
+    setCloudSyncState('connected', options.initial ? 'Initial local copy uploaded to Cloudflare D1.' : 'Saved to Cloudflare D1 just now.');
+    renderBackupInfo();
+    return true;
+  } catch (error) {
+    if (error && error.status === 409) {
+      setCloudSyncState('conflict', 'Another device changed the cloud copy. Export this device’s JSON before choosing a copy.');
+    } else {
+      handleCloudError(error);
+    }
+    return false;
+  } finally {
+    cloudSyncInProgress = false;
+  }
+}
+
+async function syncCloudData(manual = false) {
+  if (cloudSyncInProgress || location.protocol === 'file:') return;
+  if (!navigator.onLine) {
+    setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
+    renderBackupInfo();
+    return;
+  }
+
+  cloudSyncStarted = true;
+  setCloudSyncState('checking', manual ? 'Checking the cloud copy…' : 'Checking cloud sync setup…');
+  try {
+    const remote = await fetchCloudData();
+    const meta = readCloudMeta();
+
+    if (!remote.data) {
+      await pushCloudData(0, { initial: true });
+      return;
+    }
+
+    if (meta.dirty && meta.version !== Number(remote.version)) {
+      setCloudSyncState('conflict', 'This device has unsynced changes and the cloud has a newer copy. Export before choosing a copy.');
+      renderBackupInfo();
+      return;
+    }
+
+    if (meta.dirty) {
+      await pushCloudData(Number(remote.version));
+      return;
+    }
+
+    DB = normalizeData(remote.data);
+    saveData(DB, { skipCloud: true });
+    writeCloudMeta({ version: Number(remote.version) || 0, dirty: false, lastSyncAt: Date.now() });
+    setCloudSyncState('connected', `Cloud copy loaded from ${new Date(Number(remote.updatedAt) || Date.now()).toLocaleString('en-IN')}.`);
+    renderHome();
+    renderBackupInfo();
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+async function useCloudCopy() {
+  if (!confirm('Replace this device’s data with the cloud copy? Export a local backup first if you may need these changes.')) return;
+  try {
+    const remote = await fetchCloudData();
+    if (!remote.data) throw new Error('There is no cloud copy yet.');
+    DB = normalizeData(remote.data);
+    saveData(DB, { skipCloud: true });
+    writeCloudMeta({ version: Number(remote.version) || 0, dirty: false, lastSyncAt: Date.now() });
+    setCloudSyncState('connected', 'Cloud copy loaded after conflict review.');
+    renderHome();
+    renderBackupInfo();
+    toast('Cloud copy loaded', 'success');
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+async function pushLocalCopy() {
+  if (!confirm('Replace the cloud copy with this device’s data? Export a backup first and continue only if this is intentional.')) return;
+  try {
+    const remote = await fetchCloudData();
+    await pushCloudData(Number(remote.version) || 0);
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
 // Header date
 document.getElementById('headerDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -1589,11 +1790,19 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 } else if (location.protocol === 'file:') {
   updateOfflineStatus('Opened as a local file: data works locally, but browser install requires the HTTPS website.', 'var(--orange)');
 }
-window.addEventListener('online', () => updateOfflineStatus('Online — changes are stored on this device until cloud sync is configured.', 'var(--green)'));
-window.addEventListener('offline', () => updateOfflineStatus('Offline mode — the app remains usable on this device.', 'var(--orange)'));
+window.addEventListener('online', () => {
+  updateOfflineStatus('Online — local changes will sync to the cloud when configured.', 'var(--green)');
+  syncCloudData();
+});
+window.addEventListener('offline', () => {
+  updateOfflineStatus('Offline mode — the app remains usable on this device.', 'var(--orange)');
+  setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
+});
 
 // Init
 renderHome();
+renderBackupInfo();
+syncCloudData();
 </script>
 </body>
 </html>
