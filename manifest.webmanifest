@@ -1,0 +1,10 @@
+{
+  "name": "Jasmine Residency Rent Manager",
+  "short_name": "Jasmine Rent",
+  "description": "Offline-capable rent, electricity, and tenant history tracker.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1a6fc4"
+}

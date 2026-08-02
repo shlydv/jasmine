@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a6fc4">
+<link rel="manifest" href="./manifest.webmanifest">
 <title>Jasmine Residency — Rent Manager</title>
 <style>
   :root {
@@ -64,6 +66,18 @@
     user-select: none;
   }
   .flat-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .new-renter-link {
+    margin-top: 8px;
+    border: 1px solid var(--blue);
+    border-radius: 6px;
+    background: var(--blue-light);
+    color: var(--blue);
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .new-renter-link:hover { background: var(--blue); color: white; }
   .flat-card .flat-num { font-size: 26px; font-weight: 700; color: var(--blue); }
   .flat-card .flat-name { font-size: 13px; color: var(--gray); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .flat-card .flat-due {
@@ -393,7 +407,7 @@
 <div id="screen-backup" class="screen">
   <div class="section-title" style="margin-top:20px;">💾 Backup &amp; Restore</div>
   <p style="color:var(--gray); font-size:14px; margin-top:6px; margin-bottom:20px;">
-    All data is saved in this browser. Use Export to save a backup file to your phone/computer, and Import to restore it later or move to another device.
+    The app works offline after it has been opened once, but browser storage is device-specific. Use Export regularly until cloud sync is configured.
   </p>
 
   <div class="card" style="margin-bottom:20px;">
@@ -419,11 +433,27 @@
       <li>The backup file name includes today's date so you can keep multiple versions</li>
     </ul>
   </div>
+
+  <div class="card" style="background:#eef6ff; border:2px solid #9cc5ef;">
+    <h3 style="color:var(--blue);">📡 Offline access</h3>
+    <p style="color:var(--gray); font-size:14px; line-height:1.6;">
+      On Android/Chrome, open the website once while online and choose <strong>Install app</strong> or <strong>Add to Home screen</strong> from the browser menu. It will then open from the phone even without internet. Data entered offline stays on that device until you export or connect cloud sync.
+    </p>
+    <div id="offlineStatus" style="margin-top:10px; font-size:13px; color:var(--gray);">Checking offline support…</div>
+  </div>
+
+  <div class="card" style="background:#f4f0ff; border:2px solid #c4b5fd;">
+    <h3 style="color:#6d28d9;">☁️ Cloud backup / access anywhere</h3>
+    <p style="color:var(--gray); font-size:14px; line-height:1.6;">
+      Automatic multi-device sync is not enabled yet. For now, download this JSON and place it in a Google Drive folder; it is the complete backup and can be restored on another device. A secure cloud database still needs a Google Drive/Sheets or Cloudflare D1 account connection and sign-in protection.
+    </p>
+  </div>
 </div>
 
 <!-- ADD TENANT SCREEN -->
 <div id="screen-addTenant" class="screen">
   <div class="section-title" style="margin-top:20px;">Add New Tenant</div>
+  <div id="newTenantHint" style="display:none; margin:10px 0 14px; padding:10px 12px; border-radius:8px; background:var(--blue-light); color:var(--blue); font-size:14px;"></div>
   <div class="card">
     <div class="form-row">
       <div class="form-group">
@@ -644,6 +674,7 @@
       <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; align-items:center;">
         <button class="btn btn-primary" onclick="saveTenantInfo()">💾 Save Changes</button>
         <button class="btn btn-danger btn-sm" onclick="checkoutTenant()">🚪 Mark Checkout</button>
+        <button class="btn btn-primary btn-sm" onclick="startNewTenantForCurrentFlat()">➕ New Renter for This Flat</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFlat()" style="background:#7b1c1c;">🗑 Delete This Flat</button>
       </div>
     </div>
@@ -676,22 +707,92 @@
 
 <div id="toast"></div>
 
+<script src="./history_data.js"></script>
 <script>
 // ─────────────────────────────────────────────
 // DATA LAYER — localStorage
 // ─────────────────────────────────────────────
-const STORE_KEY = 'jasmineResidency_v3';
+const STORE_KEY = 'jasmineResidency_v4';
+const LEGACY_STORE_KEYS = ['jasmineResidency_v3', 'jasmineResidency_v2'];
 
 function loadData() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    const current = localStorage.getItem(STORE_KEY);
+    if (current) return normalizeData(JSON.parse(current));
+
+    for (const legacyKey of LEGACY_STORE_KEYS) {
+      const legacy = localStorage.getItem(legacyKey);
+      if (legacy) {
+        const migrated = migrateLegacyData(JSON.parse(legacy));
+        saveData(migrated);
+        return migrated;
+      }
+    }
   } catch(e) {}
-  return { tenants: getDefaultTenants() };
+  return seedData();
 }
 
 function saveData(data) {
+  data.schemaVersion = 4;
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
+}
+
+function normalizeData(data) {
+  if (!data || !Array.isArray(data.tenants)) return seedData();
+  data.tenants.forEach(t => {
+    if (!Array.isArray(t.entries)) t.entries = [];
+  });
+  return data;
+}
+
+function seedData() {
+  return applyHistorySeed({ tenants: getDefaultTenants(), schemaVersion: 4 });
+}
+
+function mergeHistoryIntoTenant(tenant) {
+  const history = globalThis.JASMINE_HISTORY;
+  const incoming = history && history.records ? history.records[String(tenant.flat)] : null;
+  if (!incoming) return tenant;
+  if (!Array.isArray(tenant.entries)) tenant.entries = [];
+
+  incoming.forEach(entry => {
+    const existing = tenant.entries.find(e => e.month === entry.month);
+    if (existing) {
+      // Preserve any values already entered by the user; only fill in source/audit metadata.
+      ['sourcePeriod', 'sourceRow', 'ebillMonth', 'meterBill', 'tenantName'].forEach(key => {
+        if (existing[key] === undefined) existing[key] = entry[key];
+      });
+      if (entry.elecBill === 0 && entry.ebillMonth === '') {
+        existing.ebillMonth = '';
+        existing.remarks = String(existing.remarks || '').replace(/; (?:Jan|Feb|Mar|Apr|May|Jun|Jul) 2026 EBill/g, '; EBill column blank in monthly sheet');
+      }
+    } else {
+      tenant.entries.push(JSON.parse(JSON.stringify(entry)));
+    }
+  });
+  tenant.entries.sort((a, b) => String(a.month || '').localeCompare(String(b.month || '')));
+  return tenant;
+}
+
+function applyHistorySeed(data) {
+  data.tenants.forEach(mergeHistoryIntoTenant);
+  return data;
+}
+
+function migrateLegacyData(data) {
+  const migrated = normalizeData(data);
+  const seeded = getDefaultTenants();
+
+  seeded.forEach(seedTenant => {
+    const matches = migrated.tenants.filter(t => String(t.flat) === String(seedTenant.flat));
+    const target = matches.find(t => t.sourcePeriod === 'Jul 2026')
+      || matches.find(t => (t.entries || []).some(e => e.sourcePeriod === 'Jul 2026' || e.month === '2026-07'))
+      || (matches.length === 1 && (matches[0].entries || []).length === 0 ? matches[0] : null);
+    if (target) mergeHistoryIntoTenant(target);
+  });
+
+  migrated.schemaVersion = 4;
+  return migrated;
 }
 
 let DB = loadData();
@@ -807,13 +908,25 @@ function renderHome() {
       const card = document.createElement('div');
       card.className = 'flat-card' + (t.checkedOut ? ' checked-out' : '');
       card.style.opacity = t.checkedOut ? '0.5' : '1';
+      const checkoutLabel = t.checkedOut
+        ? '<div style="font-size:11px;color:var(--red);margin-top:4px;">Checked Out' + (t.checkedOutAt ? ' · ' + fmtDate(t.checkedOutAt) : '') + '</div>'
+        : '';
+      const newRenterButton = t.checkedOut
+        ? '<button type="button" class="new-renter-link" data-new-renter="true">+ New renter</button>'
+        : '';
       card.innerHTML = `
         <div class="flat-num">${t.flat}</div>
         <div class="flat-name">${t.name}</div>
         <div class="flat-due ${dueClass}">${dueText}</div>
-        ${t.checkedOut ? '<div style="font-size:11px;color:var(--red);margin-top:4px;">Checked Out</div>' : ''}
+        ${checkoutLabel}
+        ${newRenterButton}
       `;
       card.onclick = () => openTenant(i);
+      const newRenter = card.querySelector('[data-new-renter]');
+      if (newRenter) newRenter.onclick = event => {
+        event.stopPropagation();
+        startNewTenantForFlat(t);
+      };
       grid.appendChild(card);
     });
   });
@@ -1000,9 +1113,9 @@ function renderHistory() {
   }
   tbody.innerHTML = [...t.entries].reverse().map(e => `
     <tr>
-      <td><strong>${fmtMonth(e.month)}</strong></td>
+      <td><strong>${fmtMonth(e.month)}</strong>${e.tenantName && e.tenantName !== t.name ? `<br><small style="color:var(--gray);">Renter: ${e.tenantName}</small>` : ''}</td>
       <td>₹${fmt(e.rent)}</td>
-      <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.consumed} units × ₹${e.rate}${e.meterBill != null && e.meterBill !== e.elecBill ? ` · meter ₹${fmt(e.meterBill)}` : ''}</small></td>
+      <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.unitStart != null && e.unitFinal != null ? `${e.consumed} units × ₹${e.rate}${e.meterBill != null && e.meterBill !== e.elecBill ? ` · meter ₹${fmt(e.meterBill)}` : ''}` : 'Meter reading not recorded'}</small></td>
       <td>₹${fmt(e.totalDue)}</td>
       <td>₹${fmt(e.paid)}</td>
       <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : e.outstanding < 0 ? 'badge-blue' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : e.outstanding < 0 ? 'credit' : 'clear'}</span></td>
@@ -1092,11 +1205,51 @@ function saveTenantInfo() {
 }
 
 function checkoutTenant() {
+  const tenant = DB.tenants[currentTenantIdx];
+  if (!tenant) return;
+  if (tenant.checkedOut) {
+    startNewTenantForFlat(tenant);
+    return;
+  }
   if (!confirm('Mark this tenant as checked out?')) return;
-  DB.tenants[currentTenantIdx].checkedOut = true;
+  tenant.checkedOut = true;
+  tenant.checkedOutAt = toDateInput(new Date());
   saveData(DB);
-  toast('Tenant marked as checked out');
-  showScreen('home');
+  if (confirm('Tenant checked out. Add a new renter for Flat ' + tenant.flat + ' now?')) {
+    startNewTenantForFlat(tenant);
+  } else {
+    toast('Tenant marked as checked out');
+    showScreen('home');
+  }
+}
+
+function startNewTenantForCurrentFlat() {
+  const tenant = DB.tenants[currentTenantIdx];
+  if (tenant) startNewTenantForFlat(tenant);
+}
+
+function resetTenantForm() {
+  ['nt_flat','nt_name','nt_rent','nt_security','nt_mobile','nt_startDate','nt_address','nt_email','nt_idNum','nt_dob','nt_meterStart'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('nt_elecRate').value = '9';
+  document.getElementById('nt_idType').value = '';
+  const hint = document.getElementById('newTenantHint');
+  hint.textContent = '';
+  hint.style.display = 'none';
+}
+
+function startNewTenantForFlat(previousTenant) {
+  resetTenantForm();
+  showScreen('addTenant');
+  document.getElementById('nt_flat').value = previousTenant.flat || '';
+  document.getElementById('nt_rent').value = previousTenant.rent || '';
+  document.getElementById('nt_meterStart').value = getLastMeter(previousTenant) || '';
+  document.getElementById('nt_elecRate').value = previousTenant.elecRate || 9;
+  const hint = document.getElementById('newTenantHint');
+  hint.textContent = 'New renter for Flat ' + previousTenant.flat + '. Previous renter and billing history are preserved.';
+  hint.style.display = 'block';
+  document.getElementById('nt_name').focus();
 }
 
 function deleteFlat() {
@@ -1160,17 +1313,19 @@ function buildBillMessage(t, entry) {
   const outstandingText = outstanding > 0 ? '₹' + outstanding + ' due' : outstanding < 0 ? '₹' + Math.abs(outstanding) + ' credit' : 'Nil';
   const amountToPay = entry.outstanding > 0 ? entry.outstanding : 0;
   const balanceText = entry.outstanding < 0 ? 'Credit =₹' + Math.abs(entry.outstanding) : 'Amount to Pay =₹' + amountToPay;
-  const electricityMonth = entry.ebillMonth || entry.month;
+  const electricityHeader = entry.ebillMonth === ''
+    ? 'Electricity Bill month not recorded'
+    : 'Electricity Bill for month of ' + fmtMonth(entry.ebillMonth || entry.month);
+  const meterText = entry.unitStart != null && entry.unitFinal != null
+    ? `Unit Start=${entry.unitStart}\nUnit Final=${entry.unitFinal}\nTotal unit=${entry.consumed}\nRate=${entry.rate}`
+    : 'Meter reading not recorded';
 
-  return `Electricity Bill for month of ${fmtMonth(electricityMonth)}
+  return `${electricityHeader}
 Name- ${t.name}
 Flat No =${t.flat}
 Rent Month=${fmtMonth(entry.month)}
 Last Outstanding=${outstandingText}
-Unit Start=${entry.unitStart}
-Unit Final=${entry.unitFinal}
-Total unit=${entry.consumed}
-Rate=${entry.rate}
+${meterText}
 ${entry.meterBill != null && entry.meterBill !== entry.elecBill ? 'Meter Bill=' + entry.meterBill + '\n' : ''}Billed Amount=${entry.elecBill}
 Rent=${entry.rent}
 ${balanceText}`;
@@ -1258,11 +1413,7 @@ function addTenant() {
   toast('Tenant added: ' + name + ' (Flat ' + flat + ')', 'success');
 
   // Clear form
-  ['nt_flat','nt_name','nt_rent','nt_security','nt_mobile','nt_startDate','nt_address','nt_email','nt_idNum','nt_dob','nt_meterStart'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('nt_elecRate').value = '9';
-  document.getElementById('nt_idType').value = '';
+  resetTenantForm();
 
   showScreen('home');
 }
@@ -1421,6 +1572,25 @@ function importData(event) {
 
 // Header date
 document.getElementById('headerDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+function updateOfflineStatus(message, color) {
+  const status = document.getElementById('offlineStatus');
+  if (!status) return;
+  status.textContent = message;
+  if (color) status.style.color = color;
+}
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => updateOfflineStatus('Offline-ready: this app can be installed from the browser menu.', 'var(--green)'))
+      .catch(() => updateOfflineStatus('Offline install is unavailable in this browser; JSON export still works.', 'var(--orange)'));
+  });
+} else if (location.protocol === 'file:') {
+  updateOfflineStatus('Opened as a local file: data works locally, but browser install requires the HTTPS website.', 'var(--orange)');
+}
+window.addEventListener('online', () => updateOfflineStatus('Online — changes are stored on this device until cloud sync is configured.', 'var(--green)'));
+window.addEventListener('offline', () => updateOfflineStatus('Offline mode — the app remains usable on this device.', 'var(--orange)'));
 
 // Init
 renderHome();
