@@ -269,6 +269,40 @@
   .modal h3 { font-size: 19px; font-weight: 700; margin-bottom: 18px; color: var(--blue); }
   .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
 
+  /* PIN gate */
+  .pin-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: linear-gradient(145deg, #145aa0, #1a6fc4 55%, #0d477d);
+  }
+  .pin-gate.hidden { display: none; }
+  .pin-card {
+    width: min(420px, 100%);
+    background: white;
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.3);
+  }
+  .pin-card h2 { color: var(--blue); margin-bottom: 8px; }
+  .pin-card p { color: var(--gray); font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
+  .pin-input {
+    width: 100%;
+    padding: 13px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 22px;
+    letter-spacing: 6px;
+    text-align: center;
+  }
+  .pin-input:focus { outline: none; border-color: var(--blue); }
+  .pin-error { min-height: 20px; margin-top: 8px; color: var(--red); font-size: 13px; font-weight: 600; }
+
   /* ── TOAST ── */
   #toast {
     position: fixed;
@@ -357,12 +391,26 @@
 </head>
 <body>
 
+<div id="pinGate" class="pin-gate" role="dialog" aria-modal="true" aria-labelledby="pinTitle">
+  <div class="pin-card">
+    <div style="font-size:44px; margin-bottom:8px;">J</div>
+    <h2 id="pinTitle">Jasmine Residency</h2>
+    <p>Enter the 6-digit passcode to open the rent and billing manager.</p>
+    <input id="appPinInput" class="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="******" onkeydown="if(event.key==='Enter') unlockApp()">
+    <div id="pinError" class="pin-error"></div>
+    <button class="btn btn-primary" style="width:100%; margin-top:4px; font-size:17px;" onclick="unlockApp()">Unlock</button>
+  </div>
+</div>
+
 <header>
   <div>
     <h1>🏢 Jasmine Residency</h1>
     <p>Sikanderpur (Badha) Sector 85, Gurugram</p>
   </div>
-  <div class="header-right" id="headerDate"></div>
+  <div class="header-right">
+    <div id="headerDate"></div>
+    <button class="btn btn-sm" style="margin-top:7px; background:rgba(255,255,255,0.18); color:white; border:1px solid rgba(255,255,255,0.45);" onclick="lockApp()">Lock</button>
+  </div>
 </header>
 
 <nav>
@@ -417,6 +465,13 @@
     <div id="exportInfo" style="margin-top:12px; font-size:13px; color:var(--gray);"></div>
   </div>
 
+  <div class="card" style="background:#fffdf2; border:2px solid #f4d35e;">
+    <h3 style="color:#946c00;">Undo / Revert</h3>
+    <p style="color:var(--gray); font-size:14px; line-height:1.6;">The app keeps the last 20 saved changes on this device. This can restore an accidental checkout, tenant edit, bill, import, delete, or new renter.</p>
+    <button class="btn" id="undoBtn" type="button" style="background:#f4d35e; color:#3d2d00;" onclick="undoLastChange()">Undo last change</button>
+    <div id="undoInfo" style="margin-top:10px; font-size:13px; color:var(--gray);"></div>
+  </div>
+
   <div class="card">
     <h3 style="color:var(--blue);">⬆️ Import — Restore from Backup</h3>
     <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Select a previously exported <strong>.json</strong> backup file. <strong style="color:var(--red);">Warning: this will replace all current data.</strong></p>
@@ -445,7 +500,7 @@
   <div class="card" style="background:#f4f0ff; border:2px solid #c4b5fd;">
     <h3 style="color:#6d28d9;">☁️ Cloud backup / access anywhere</h3>
     <p style="color:var(--gray); font-size:14px; line-height:1.6;">
-      Your data remains available offline in this browser and synchronizes to Cloudflare D1 when the site is configured and you are signed in with Cloudflare Access. The cloud copy is protected by login and is used on other devices.
+      Your data remains available offline in this browser. Each online open fetches and caches the complete portfolio of all flats. Offline changes are kept locally and offered for upload when the network returns; the upload asks for the passcode and can be cancelled.
     </p>
     <div id="cloudSyncStatus" style="margin:12px 0; font-size:14px; font-weight:600; color:var(--gray);">Cloud sync: checking…</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -681,6 +736,7 @@
       <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; align-items:center;">
         <button class="btn btn-primary" onclick="saveTenantInfo()">💾 Save Changes</button>
         <button class="btn btn-danger btn-sm" onclick="checkoutTenant()">🚪 Mark Checkout</button>
+        <button class="btn btn-success btn-sm" onclick="reopenTenant()">↩ Reopen Tenant</button>
         <button class="btn btn-primary btn-sm" onclick="startNewTenantForCurrentFlat()">➕ New Renter for This Flat</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFlat()" style="background:#7b1c1c;">🗑 Delete This Flat</button>
       </div>
@@ -692,7 +748,7 @@
 <div class="modal-overlay" id="deleteModal">
   <div class="modal">
     <h3>⚠️ Delete Entry?</h3>
-    <p style="font-size:15px; color:var(--gray);">This will permanently remove this billing entry. Are you sure?</p>
+    <p style="font-size:15px; color:var(--gray);">This removes the billing entry. You can use Undo last change afterward if this was accidental. Are you sure?</p>
     <div class="modal-footer">
       <button class="btn" style="background:var(--border); color:#333;" onclick="closeModal('deleteModal')">Cancel</button>
       <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
@@ -704,10 +760,24 @@
 <div class="modal-overlay" id="deleteFlatModal">
   <div class="modal">
     <h3>⚠️ Delete Flat?</h3>
-    <p style="font-size:15px; color:var(--gray);">This will <strong>permanently delete</strong> this flat and ALL its history. This cannot be undone. Are you sure?</p>
+    <p style="font-size:15px; color:var(--gray);">This removes the flat and ALL its history from the active data. The last 20 saved changes can be restored from Backup → Undo if this was accidental. Are you sure?</p>
     <div class="modal-footer">
       <button class="btn" style="background:var(--border); color:#333;" onclick="closeModal('deleteFlatModal')">Cancel</button>
       <button class="btn btn-danger" id="confirmDeleteFlatBtn">Yes, Delete Flat</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLOUD PUSH CONFIRMATION -->
+<div class="modal-overlay" id="cloudPushModal">
+  <div class="modal">
+    <h3>Confirm cloud upload</h3>
+    <p id="cloudPushMessage" style="font-size:15px; color:var(--gray); line-height:1.6;">This will upload the local copy of all flats to Cloudflare D1. Enter the passcode to continue, or cancel to keep the data only on this device for now.</p>
+    <input id="cloudPushPin" class="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Passcode" onkeydown="if(event.key==='Enter') confirmCloudPush()">
+    <div id="cloudPushError" class="pin-error"></div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--border); color:#333;" onclick="cancelCloudPush()">Cancel upload</button>
+      <button class="btn btn-primary" onclick="confirmCloudPush()">Upload to D1</button>
     </div>
   </div>
 </div>
@@ -728,6 +798,71 @@ let cloudSyncInProgress = false;
 let cloudSyncStarted = false;
 let cloudSyncState = 'not_checked';
 let cloudSyncMessage = 'Cloud sync has not checked this device yet.';
+const APP_PIN = '172695';
+const PIN_SESSION_KEY = 'jasmineResidency_pinUnlocked_v1';
+const UNDO_KEY = 'jasmineResidency_undo_v1';
+let appUnlocked = false;
+let cloudPushPermission = false;
+let pendingOfflinePush = false;
+let cloudPushConsentResolver = null;
+let undoStack = [];
+let lastSavedSnapshot = '';
+
+function loadUndoStack() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(UNDO_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(item => item && item.data && Array.isArray(item.data.tenants)).slice(-20) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function persistUndoStack() {
+  try { localStorage.setItem(UNDO_KEY, JSON.stringify(undoStack.slice(-20))); } catch (error) {}
+}
+
+function pushUndoSnapshot(label, snapshot) {
+  try {
+    undoStack.push({ label: label || 'Previous change', at: Date.now(), data: JSON.parse(snapshot) });
+    undoStack = undoStack.slice(-20);
+    persistUndoStack();
+  } catch (error) {}
+}
+
+function unlockApp(fromSession = false) {
+  const input = document.getElementById('appPinInput');
+  const error = document.getElementById('pinError');
+  if (!fromSession && (!input || input.value !== APP_PIN)) {
+    if (error) error.textContent = 'Incorrect passcode.';
+    if (input) { input.value = ''; input.focus(); }
+    return false;
+  }
+  appUnlocked = true;
+  try { sessionStorage.setItem(PIN_SESSION_KEY, '1'); } catch (storageError) {}
+  document.getElementById('pinGate').classList.add('hidden');
+  if (error) error.textContent = '';
+  if (navigator.onLine) syncCloudData(true);
+  return true;
+}
+
+function lockApp() {
+  if (cloudPushConsentResolver) cancelCloudPush();
+  appUnlocked = false;
+  cloudPushPermission = false;
+  clearTimeout(cloudSyncTimer);
+  try { sessionStorage.removeItem(PIN_SESSION_KEY); } catch (storageError) {}
+  const gate = document.getElementById('pinGate');
+  const input = document.getElementById('appPinInput');
+  if (gate) gate.classList.remove('hidden');
+  if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+}
+
+function initializePinGate() {
+  let alreadyUnlocked = false;
+  try { alreadyUnlocked = sessionStorage.getItem(PIN_SESSION_KEY) === '1'; } catch (storageError) {}
+  if (alreadyUnlocked) unlockApp(true);
+  else setTimeout(() => document.getElementById('appPinInput')?.focus(), 50);
+}
 
 function readCloudMeta() {
   try {
@@ -762,6 +897,7 @@ function setCloudSyncState(state, message) {
       auth: 'Cloud sync: sign-in required',
       unavailable: 'Cloud sync: setup incomplete',
       conflict: 'Cloud sync: conflict needs review',
+      local_only: 'Cloud sync: local copy only',
       error: 'Cloud sync: temporarily unavailable',
       not_checked: 'Cloud sync: not checked'
     };
@@ -774,7 +910,7 @@ function setCloudSyncState(state, message) {
 }
 
 function queueCloudSave() {
-  if (!cloudSyncStarted || cloudSyncState === 'auth' || cloudSyncState === 'unavailable' || !navigator.onLine) return;
+  if (!appUnlocked || !cloudSyncStarted || cloudSyncState === 'auth' || cloudSyncState === 'unavailable' || !navigator.onLine) return;
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(() => pushCloudData(readCloudMeta().version), 800);
 }
@@ -798,11 +934,17 @@ function loadData() {
 
 function saveData(data, options = {}) {
   data.schemaVersion = 4;
-  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  const serialized = JSON.stringify(data);
+  if (!options.skipUndo && lastSavedSnapshot && serialized !== lastSavedSnapshot) {
+    pushUndoSnapshot(options.label || 'Previous change', lastSavedSnapshot);
+  }
+  localStorage.setItem(STORE_KEY, serialized);
+  lastSavedSnapshot = serialized;
   if (!options.skipCloud) {
     const meta = readCloudMeta();
     meta.dirty = true;
     writeCloudMeta(meta);
+    if (!navigator.onLine) pendingOfflinePush = true;
     queueCloudSave();
   }
 }
@@ -866,6 +1008,8 @@ function migrateLegacyData(data) {
 }
 
 let DB = loadData();
+lastSavedSnapshot = JSON.stringify(DB);
+undoStack = loadUndoStack();
 
 function getDefaultTenants() {
   // Current seed: Jul 2026 workbook summary. Sensitive identity/contact fields are intentionally not embedded.
@@ -1160,7 +1304,7 @@ function saveBillingEntry() {
   if (!t.entries) t.entries = [];
   t.entries.push(entry);
   t.elecRate = rate;
-  saveData(DB);
+  saveData(DB, { label: 'Added billing entry for Flat ' + t.flat });
 
   const balanceMessage = outstanding > 0
     ? 'Outstanding: ₹' + fmt(outstanding)
@@ -1203,7 +1347,7 @@ function confirmDelete(entryId) {
   document.getElementById('confirmDeleteBtn').onclick = () => {
     const t = DB.tenants[currentTenantIdx];
     t.entries = t.entries.filter(e => e.id !== entryId);
-    saveData(DB);
+    saveData(DB, { label: 'Deleted billing entry for Flat ' + t.flat });
     closeModal('deleteModal');
     renderHistory();
     openTenant(currentTenantIdx);
@@ -1269,7 +1413,7 @@ function saveTenantInfo() {
   t.dob = document.getElementById('ti_dob').value;
   t.lastMeter = parseFloat(document.getElementById('ti_lastMeter').value) || 0;
   t.elecRate = parseFloat(document.getElementById('ti_elecRate').value) || 9;
-  saveData(DB);
+  saveData(DB, { label: 'Edited tenant details for Flat ' + t.flat });
   toast('Tenant info saved!', 'success');
   openTenant(currentTenantIdx);
 }
@@ -1284,13 +1428,28 @@ function checkoutTenant() {
   if (!confirm('Mark this tenant as checked out?')) return;
   tenant.checkedOut = true;
   tenant.checkedOutAt = toDateInput(new Date());
-  saveData(DB);
+  saveData(DB, { label: 'Checked out Flat ' + tenant.flat });
   if (confirm('Tenant checked out. Add a new renter for Flat ' + tenant.flat + ' now?')) {
     startNewTenantForFlat(tenant);
   } else {
     toast('Tenant marked as checked out');
     showScreen('home');
   }
+}
+
+function reopenTenant() {
+  const tenant = DB.tenants[currentTenantIdx];
+  if (!tenant) return;
+  if (!tenant.checkedOut) {
+    toast('This renter is already active.');
+    return;
+  }
+  if (!confirm('Reopen ' + tenant.name + ' in Flat ' + tenant.flat + '? The checkout marker will be removed, but the billing history will remain.')) return;
+  tenant.checkedOut = false;
+  delete tenant.checkedOutAt;
+  saveData(DB, { label: 'Reopened Flat ' + tenant.flat });
+  openTenant(currentTenantIdx);
+  toast('Tenant reopened', 'success');
 }
 
 function startNewTenantForCurrentFlat() {
@@ -1324,8 +1483,9 @@ function startNewTenantForFlat(previousTenant) {
 
 function deleteFlat() {
   document.getElementById('confirmDeleteFlatBtn').onclick = () => {
+    const removed = DB.tenants[currentTenantIdx];
     DB.tenants.splice(currentTenantIdx, 1);
-    saveData(DB);
+    saveData(DB, { label: 'Deleted Flat ' + (removed ? removed.flat : 'record') });
     closeModal('deleteFlatModal');
     toast('Flat deleted');
     showScreen('home');
@@ -1479,7 +1639,7 @@ function addTenant() {
   };
 
   DB.tenants.push(tenant);
-  saveData(DB);
+  saveData(DB, { label: 'Added renter ' + name + ' in Flat ' + flat });
   toast('Tenant added: ' + name + ' (Flat ' + flat + ')', 'success');
 
   // Clear form
@@ -1569,6 +1729,40 @@ function renderBackupInfo() {
   document.getElementById('exportInfo').textContent =
     `Current data: ${tenants} active tenants · ${totalEntries} billing entries`;
   setCloudSyncState(cloudSyncState, cloudSyncMessage);
+  renderUndoInfo();
+}
+
+function renderUndoInfo() {
+  const button = document.getElementById('undoBtn');
+  const info = document.getElementById('undoInfo');
+  if (!button || !info) return;
+  button.disabled = undoStack.length === 0;
+  button.style.opacity = undoStack.length === 0 ? '0.55' : '1';
+  if (undoStack.length === 0) {
+    info.textContent = 'No saved changes to revert yet.';
+    return;
+  }
+  const latest = undoStack[undoStack.length - 1];
+  const when = latest.at ? new Date(latest.at).toLocaleString('en-IN') : '';
+  info.textContent = `${undoStack.length} undo point${undoStack.length === 1 ? '' : 's'} available. Latest: ${latest.label}${when ? ' · ' + when : ''}`;
+}
+
+function undoLastChange() {
+  if (!appUnlocked) return;
+  if (undoStack.length === 0) {
+    toast('There is no saved change to undo.', 'error');
+    return;
+  }
+  const latest = undoStack[undoStack.length - 1];
+  if (!confirm(`Revert “${latest.label}”? The current data will be replaced by the previous saved copy.`)) return;
+  undoStack.pop();
+  persistUndoStack();
+  DB = normalizeData(latest.data);
+  currentTenantIdx = null;
+  saveData(DB, { skipUndo: true, label: 'Undo: ' + latest.label });
+  showScreen('home');
+  renderBackupInfo();
+  toast('Reverted: ' + latest.label, 'success');
 }
 
 function exportData() {
@@ -1625,7 +1819,7 @@ function importData(event) {
       }
 
       DB = parsed;
-      saveData(DB);
+      saveData(DB, { label: 'Imported backup file' });
 
       statusEl.innerHTML = `✅ Restored successfully! ${tenantCount} tenants, ${entryCount} entries loaded.`;
       statusEl.style.color = 'var(--green)';
@@ -1675,8 +1869,53 @@ function handleCloudError(error) {
   renderBackupInfo();
 }
 
+function requestCloudPushConsent(message) {
+  if (cloudPushPermission) return Promise.resolve(true);
+  if (!appUnlocked) return Promise.resolve(false);
+  return new Promise(resolve => {
+    cloudPushConsentResolver = resolve;
+    document.getElementById('cloudPushMessage').textContent = message || 'This will upload the local copy of all flats to Cloudflare D1. Enter the passcode to continue, or cancel to keep the data only on this device for now.';
+    document.getElementById('cloudPushPin').value = '';
+    document.getElementById('cloudPushError').textContent = '';
+    document.getElementById('cloudPushModal').classList.add('open');
+    setTimeout(() => document.getElementById('cloudPushPin').focus(), 50);
+  });
+}
+
+function finishCloudPushConsent(allowed) {
+  const resolver = cloudPushConsentResolver;
+  cloudPushConsentResolver = null;
+  document.getElementById('cloudPushModal').classList.remove('open');
+  if (resolver) resolver(allowed);
+}
+
+function cancelCloudPush() {
+  finishCloudPushConsent(false);
+}
+
+function confirmCloudPush() {
+  const pin = document.getElementById('cloudPushPin').value;
+  if (pin !== APP_PIN) {
+    document.getElementById('cloudPushError').textContent = 'Incorrect passcode. Upload cancelled unless the correct passcode is entered.';
+    document.getElementById('cloudPushPin').value = '';
+    document.getElementById('cloudPushPin').focus();
+    return;
+  }
+  cloudPushPermission = true;
+  finishCloudPushConsent(true);
+}
+
 async function pushCloudData(expectedVersion, options = {}) {
-  if (cloudSyncInProgress || !navigator.onLine || location.protocol === 'file:') return false;
+  if (!appUnlocked || cloudSyncInProgress || !navigator.onLine || location.protocol === 'file:') return false;
+  const consent = await requestCloudPushConsent(pendingOfflinePush
+    ? 'This device has changes made while offline. Upload the complete local copy of all flats to Cloudflare D1? Enter the passcode to continue, or cancel to keep the offline copy local.'
+    : options.message);
+  if (!consent) {
+    pendingOfflinePush = true;
+    setCloudSyncState('local_only', 'Upload cancelled. The complete local copy remains safe on this device; use Sync now when ready.');
+    renderBackupInfo();
+    return false;
+  }
   cloudSyncInProgress = true;
   setCloudSyncState('syncing', 'Uploading the latest local copy…');
   try {
@@ -1688,7 +1927,8 @@ async function pushCloudData(expectedVersion, options = {}) {
     });
     const result = await readCloudResponse(response);
     writeCloudMeta({ version: Number(result.version) || 0, dirty: false, lastSyncAt: Date.now() });
-    setCloudSyncState('connected', options.initial ? 'Initial local copy uploaded to Cloudflare D1.' : 'Saved to Cloudflare D1 just now.');
+    pendingOfflinePush = false;
+    setCloudSyncState('connected', options.initial ? 'Initial local copy of all flats uploaded to Cloudflare D1.' : 'Saved all flats to Cloudflare D1 just now.');
     renderBackupInfo();
     return true;
   } catch (error) {
@@ -1704,7 +1944,7 @@ async function pushCloudData(expectedVersion, options = {}) {
 }
 
 async function syncCloudData(manual = false) {
-  if (cloudSyncInProgress || location.protocol === 'file:') return;
+  if (!appUnlocked || cloudSyncInProgress || location.protocol === 'file:') return;
   if (!navigator.onLine) {
     setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
     renderBackupInfo();
@@ -1736,7 +1976,9 @@ async function syncCloudData(manual = false) {
     DB = normalizeData(remote.data);
     saveData(DB, { skipCloud: true });
     writeCloudMeta({ version: Number(remote.version) || 0, dirty: false, lastSyncAt: Date.now() });
-    setCloudSyncState('connected', `Cloud copy loaded from ${new Date(Number(remote.updatedAt) || Date.now()).toLocaleString('en-IN')}.`);
+    pendingOfflinePush = false;
+    const flatCount = DB.tenants.length;
+    setCloudSyncState('connected', `Loaded and cached all ${flatCount} flats from the cloud at ${new Date(Number(remote.updatedAt) || Date.now()).toLocaleString('en-IN')}.`);
     renderHome();
     renderBackupInfo();
   } catch (error) {
@@ -1791,10 +2033,14 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   updateOfflineStatus('Opened as a local file: data works locally, but browser install requires the HTTPS website.', 'var(--orange)');
 }
 window.addEventListener('online', () => {
-  updateOfflineStatus('Online — local changes will sync to the cloud when configured.', 'var(--green)');
+  pendingOfflinePush = pendingOfflinePush || readCloudMeta().dirty;
+  cloudPushPermission = false;
+  updateOfflineStatus('Online — local changes will sync after the cloud-upload passcode is confirmed.', 'var(--green)');
   syncCloudData();
 });
 window.addEventListener('offline', () => {
+  pendingOfflinePush = true;
+  cloudPushPermission = false;
   updateOfflineStatus('Offline mode — the app remains usable on this device.', 'var(--orange)');
   setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
 });
@@ -1802,7 +2048,7 @@ window.addEventListener('offline', () => {
 // Init
 renderHome();
 renderBackupInfo();
-syncCloudData();
+initializePinGate();
 </script>
 </body>
 </html>

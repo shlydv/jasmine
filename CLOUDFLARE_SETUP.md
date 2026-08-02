@@ -19,7 +19,9 @@ In Cloudflare Dashboard:
 3. Set the variable name exactly to `JASMINE_DB` and select `jasmine-residency`.
 4. Repeat for Production if Cloudflare shows separate Preview/Production environments.
 
-Redeploy the site after adding the binding.
+After clicking **Add binding**, the binding should remain visible in the Production bindings list. Redeploy the site after adding it; bindings are injected into the Pages Function only on a deployment. If the button appears to do nothing, refresh the dashboard, confirm that you are editing the Pages project (not a separate Worker), select the Production environment, and try the binding again. The app's Backup screen will show the exact API response after deployment: `Cloud sync: connected` means the binding and Access variables are working; `Cloud sync: setup incomplete` means the function still cannot see D1 or its configuration.
+
+Do not add a binding only to Preview and then test the production custom domain. The production and preview environments can have different bindings.
 
 ## 3. Protect the app with free Cloudflare Access
 
@@ -33,6 +35,8 @@ Because the database contains renter and billing information, do not expose the 
 
 Cloudflare Access's Free plan is intended for fewer than 50 users. The Pages Function independently validates the signed `Cf-Access-Jwt-Assertion` token, its issuer, expiry, signature, and audience, so a direct/bypassed request cannot impersonate an authenticated user.
 
+The in-app PIN (`172695`) is a convenience lock for family use and protects normal access on the device. It is intentionally not treated as the cloud security boundary because a PIN embedded in a browser app can be inspected by someone with developer access. Cloudflare Access plus a private GitHub repository are the real protection for renter and billing data.
+
 ## 4. Add the two Pages variables
 
 In **Workers & Pages → Jasmine → Settings → Variables and Secrets**, add these as production variables:
@@ -45,10 +49,13 @@ Redeploy once more. The Backup screen should show **Cloud sync: connected** afte
 ## How synchronization behaves
 
 - The app still works offline using local browser storage.
+- Each online open reads the complete JSON portfolio from D1 and writes that complete portfolio into local browser storage, so the next offline open has all flats available.
 - Opening it online pulls the D1 copy to a new device.
 - Every local save is uploaded in the background.
+- If a change was made while offline, the first upload after the network returns asks for the app passcode. Cancel keeps the local copy and leaves it marked as unsynced.
 - If two devices save different changes at the same time, the second device gets a conflict instead of silently overwriting the first. Export its JSON backup, review it, then use the cloud copy or import the backup deliberately.
 - D1's built-in Time Travel provides point-in-time recovery for the last 30 days. Keep the existing JSON download as a longer-term backup as well.
+- The Backup screen keeps the last 20 local saved states for Undo/Revert. This covers checkout, tenant edits, bills, imports, deletes, and new renters.
 
 ## Local testing
 
