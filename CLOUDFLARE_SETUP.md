@@ -1,8 +1,8 @@
 # Jasmine cloud sync setup (Cloudflare Free)
 
-The repository now contains a Cloudflare Pages Function at `/api/data`. It keeps the browser's local copy for offline use, and synchronizes the same JSON data to Cloudflare D1 when online. The API is fail-closed: it will not read or write data until both D1 and Cloudflare Access authentication are configured.
+The repository is deployed as a Cloudflare Worker with static assets. [`_worker.js`](./_worker.js) serves the existing HTML through the `ASSETS` binding and routes `/api/data` to the D1 API. It keeps the browser's local copy for offline use, and synchronizes the same JSON data to Cloudflare D1 when online. The API is fail-closed: it will not read or write data until both D1 and Cloudflare Access authentication are configured.
 
-Cloudflare's current Free plan is sufficient for this small household app. D1 is available on Free; the documented allowance is 5 GB stored data, 5 million row reads/day, and 100,000 row writes/day. Pages Functions share the Workers Free quota of 100,000 requests/day.
+Cloudflare's current Free plan is sufficient for this small household app. D1 is available on Free; the documented allowance is 5 GB stored data, 5 million row reads/day, and 100,000 row writes/day. Worker requests use the Workers Free quota of 100,000 requests/day.
 
 ## 1. Create the D1 database
 
@@ -12,20 +12,20 @@ In Cloudflare Dashboard:
 2. Name it `jasmine-residency`.
 3. Open the database's **Console**, paste the contents of [`schema.sql`](./schema.sql), and run it.
 
-## 2. Bind it to the Pages project
+## 2. Bind it to the Worker shown in the dashboard
 
-1. Open **Workers & Pages → your Jasmine Pages project → Settings → Bindings**.
+1. Open **Workers & Pages → jasmine-residency → Bindings**. This is the Worker project shown in the dashboard screenshot; do not create a separate Pages project.
 2. Add a **D1 database** binding.
 3. Set the variable name exactly to `JASMINE_DB` and select `jasmine-residency`.
 4. Repeat for Production if Cloudflare shows separate Preview/Production environments.
 
-After clicking **Add binding**, the binding should remain visible in the Production bindings list. Redeploy the site after adding it; bindings are injected into the Pages Function only on a deployment. If the button appears to do nothing, refresh the dashboard, confirm that you are editing the Pages project (not a separate Worker), select the Production environment, and try the binding again. The app's Backup screen will show the exact API response after deployment: `Cloud sync: connected` means the binding and Access variables are working; `Cloud sync: setup incomplete` means the function still cannot see D1 or its configuration.
+After clicking **Add binding**, the Bindings count should change from `0` to `1` and the `JASMINE_DB → jasmine-residency` row should remain visible. Redeploy the Worker after adding it; bindings are injected only on a deployment. The repository includes `wrangler.toml` and `_worker.js`, so the deployment routes `/api/data` correctly. If the button appears to do nothing, refresh the dashboard, select Production, and try again. The app's Backup screen will show the exact API response after deployment: `Cloud sync: connected` means the binding and Access variables are working; `Cloud sync: setup incomplete` means the Worker still cannot see D1 or its configuration.
 
 Do not add a binding only to Preview and then test the production custom domain. The production and preview environments can have different bindings.
 
 ## 3. Protect the app with free Cloudflare Access
 
-Because the database contains renter and billing information, do not expose the Pages site/API publicly.
+Because the database contains renter and billing information, do not expose the Worker/API publicly.
 
 1. Open **Zero Trust → Access controls → Applications → Add application → Self-hosted**.
 2. Protect the exact hostname used by the app, for example `www.aaskdasodas.com/*`.
@@ -33,13 +33,13 @@ Because the database contains renter and billing information, do not expose the 
 4. Copy the application's **Application Audience (AUD) Tag** from its additional settings.
 5. Note your Zero Trust team domain, such as `https://your-team.cloudflareaccess.com`.
 
-Cloudflare Access's Free plan is intended for fewer than 50 users. The Pages Function independently validates the signed `Cf-Access-Jwt-Assertion` token, its issuer, expiry, signature, and audience, so a direct/bypassed request cannot impersonate an authenticated user.
+Cloudflare Access's Free plan is intended for fewer than 50 users. The Worker independently validates the signed `Cf-Access-Jwt-Assertion` token, its issuer, expiry, signature, and audience, so a direct/bypassed request cannot impersonate an authenticated user.
 
 The in-app PIN (`172695`) is a convenience lock for family use and protects normal access on the device. It is intentionally not treated as the cloud security boundary because a PIN embedded in a browser app can be inspected by someone with developer access. Cloudflare Access plus a private GitHub repository are the real protection for renter and billing data.
 
-## 4. Add the two Pages variables
+## 4. Add the two Worker variables
 
-In **Workers & Pages → Jasmine → Settings → Variables and Secrets**, add these as production variables:
+In **Workers & Pages → jasmine-residency → Settings → Variables and Secrets**, add these as production variables:
 
 - `CF_ACCESS_TEAM_DOMAIN` = your Zero Trust team domain, including `https://`.
 - `CF_ACCESS_AUD` = the Access application's AUD tag.
@@ -59,4 +59,4 @@ Redeploy once more. The Backup screen should show **Cloud sync: connected** afte
 
 ## Local testing
 
-The production setup is easiest through the dashboard. For local Pages testing, install Wrangler and run the Pages dev server with a local D1 binding; do not put Access secrets in the repository.
+The production setup is easiest through the dashboard. For local Worker testing, install Wrangler and run `npx wrangler dev`; do not put Access secrets in the repository. The committed `wrangler.toml` intentionally does not contain a D1 database ID because the production binding is managed in the dashboard.

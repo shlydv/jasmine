@@ -1,0 +1,8 @@
+_worker.js
+wrangler.toml
+.assetsignore
+.git
+.git/**
+functions
+schema.sql
+CLOUDFLARE_SETUP.md

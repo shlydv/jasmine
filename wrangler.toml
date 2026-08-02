@@ -1,0 +1,8 @@
+name = "jasmine-residency"
+main = "./_worker.js"
+compatibility_date = "2026-08-02"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
