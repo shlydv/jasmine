@@ -2,6 +2,11 @@ name = "jasmine-residency"
 main = "./_worker.js"
 compatibility_date = "2026-08-02"
 
+[[d1_databases]]
+binding = "JASMINE_DB"
+database_name = "jasmine-residency"
+database_id = "e1c95515-ea2d-47c8-ac89-1035d9852795"
+
 [assets]
 directory = "."
 binding = "ASSETS"
