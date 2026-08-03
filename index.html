@@ -957,8 +957,60 @@ function normalizeData(data) {
   return data;
 }
 
+// Audited July 2026 electricity amounts from each flat's individual sheet.
+// Room 104 is intentionally omitted: its sheet has multiple current meter lines.
+const AUDITED_INDIVIDUAL_JULY = Object.freeze({
+  '101': { elecBill: 450, meterBill: 450, source: 'Individual sheet 101 row 66' },
+  '102': { elecBill: 1035, meterBill: 1035, source: 'Individual sheet 102 row 93' },
+  '103': { elecBill: 81, meterBill: 81, source: 'Individual sheet 103 row 77' },
+  '201': { elecBill: 1890, meterBill: 1890, source: 'Individual sheet 201 row 65' },
+  '202': { elecBill: 747, meterBill: 747, source: 'Individual sheet 202 row 69' },
+  '203': { elecBill: 792, meterBill: 792, source: 'Individual sheet 203 row 87' },
+  '204': { elecBill: 351, meterBill: 351, source: 'Individual sheet 204 row 79' },
+  '205': { elecBill: 2799, meterBill: 2799, source: 'Individual sheet 205 row 84' },
+  '206': { elecBill: 315, meterBill: 315, source: 'Individual sheet 206 row 82' },
+  '207': { elecBill: 1674, meterBill: 1674, source: 'Individual sheet 207 row 90' },
+  '208': { elecBill: 549, meterBill: 549, source: 'Individual sheet 208 row 139' },
+  '209': { elecBill: 2025, meterBill: 2025, source: 'Individual sheet 209 row 84' },
+  '301': { elecBill: 648, meterBill: 648, source: 'Individual sheet 301 row 121' },
+  '302': { elecBill: 648, meterBill: 648, source: 'Individual sheet 302 row 55' },
+  '303': { elecBill: 4545, meterBill: 4545, source: 'Individual sheet 303 row 90' },
+  '304': { elecBill: 2169, meterBill: 2169, source: 'Individual sheet 304 row 93' },
+  '305': { elecBill: 945, meterBill: 945, source: 'Individual sheet 305 row 77' },
+  '306': { elecBill: 891, meterBill: 891, source: 'Individual sheets 306 rows 70/86' },
+  '307': { elecBill: 4797, meterBill: 4797, source: 'Individual sheet 307 row 63' },
+  '308': { elecBill: 459, meterBill: 459, source: 'Individual sheet 308 row 98' },
+  '309': { elecBill: 1728, meterBill: 1728, source: 'Individual sheet 309 row 107' },
+  '401': { elecBill: 1026, meterBill: 1026, source: 'Individual sheet 401 row 64' },
+  '402': { elecBill: 3528, meterBill: 3528, source: 'Individual sheet 402 row 124' },
+  '403': { elecBill: 792, meterBill: 792, source: 'Individual sheet 403 row 99' },
+  '404': { elecBill: 2385, meterBill: 2385, source: 'Individual sheet 404 row 74' },
+  '405': { elecBill: 3409, meterBill: 3409, source: 'Individual sheet 405 row 60' },
+  '406': { elecBill: 2304, meterBill: 2304, source: 'Individual sheet 406 row 110' },
+  '407': { unitStart: 6248, unitFinal: 6381, consumed: 133, elecBill: 1197, meterBill: 1197, source: 'Individual sheet 407 row 73' },
+  '408': { elecBill: 837, meterBill: 837, source: 'Individual sheet 408 row 102' },
+  '409': { elecBill: 2358, meterBill: 2358, source: 'Individual sheet 409 row 63' },
+  '501': { elecBill: 702, meterBill: 702, source: 'Individual sheet 501 row 103' }
+});
+
+function applyAuditedIndividualJulySeed(data) {
+  data.tenants.forEach(tenant => {
+    const source = AUDITED_INDIVIDUAL_JULY[String(tenant.flat)];
+    const entry = (tenant.entries || []).find(item => item.month === '2026-07');
+    if (!source || !entry) return;
+    Object.assign(entry, source);
+    entry.ebillMonth = '2026-06';
+    const rent = Number(entry.rent) || 0;
+    const lastOutstanding = Number(entry.lastOutstanding) || 0;
+    const paid = Number(entry.paid) || 0;
+    entry.totalDue = rent + entry.elecBill + lastOutstanding;
+    entry.outstanding = entry.totalDue - paid;
+  });
+  return data;
+}
+
 function seedData() {
-  return applyHistorySeed({ tenants: getDefaultTenants(), schemaVersion: 4 });
+  return applyAuditedIndividualJulySeed(applyHistorySeed({ tenants: getDefaultTenants(), schemaVersion: 4 }));
 }
 
 function mergeHistoryIntoTenant(tenant) {
