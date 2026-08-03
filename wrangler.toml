@@ -2,6 +2,10 @@ name = "jasmine-residency"
 main = "./_worker.js"
 compatibility_date = "2026-08-02"
 
+[vars]
+CF_ACCESS_TEAM_DOMAIN = "https://sahil27gunwal.cloudflareaccess.com"
+CF_ACCESS_AUD = "a7df588630b49f4a0753257f52527e576825498b1e5509272d9a7ceb95c60f72"
+
 [[d1_databases]]
 binding = "JASMINE_DB"
 database_name = "jasmine-residency"
