@@ -328,6 +328,18 @@
   .summary-card { background: var(--white); border-radius: 10px; padding: 16px; box-shadow: var(--shadow); }
   .summary-card .sc-label { font-size: 13px; color: var(--gray); }
   .summary-card .sc-val { font-size: 24px; font-weight: 700; color: var(--blue); margin-top: 4px; }
+  .summary-toolbar { display:flex; align-items:end; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:18px 0 4px; }
+  .summary-toolbar input { padding:9px 12px; border:2px solid var(--border); border-radius:8px; font-size:15px; background:white; }
+  .status-pill { display:inline-block; border-radius:999px; padding:4px 9px; font-size:12px; font-weight:700; white-space:nowrap; }
+  .status-paid { background:#dcfce7; color:#166534; }
+  .status-due { background:#fee2e2; color:#991b1b; }
+  .status-credit { background:#dbeafe; color:#1e40af; }
+  .status-missing { background:#fef3c7; color:#92400e; }
+  .math-warning { display:block; color:#b45309; font-size:11px; font-weight:600; margin-top:5px; line-height:1.35; }
+  .history-actions { display:flex; gap:6px; white-space:nowrap; }
+  .btn-edit { background:#e0e7ff; color:#3730a3; }
+  .reminder-note { background:#fff7ed; border:1px solid #fdba74; border-radius:8px; padding:11px 13px; color:#9a3412; font-size:13px; margin:10px 0 14px; }
+  .modal-wide { width:min(760px, 100%); max-height:92vh; overflow:auto; }
 
   /* ── NAV ── */
   nav {
@@ -436,16 +448,32 @@
 
 <!-- SUMMARY SCREEN -->
 <div id="screen-summary" class="screen">
-  <div class="section-title" style="margin-top:20px;">Property Overview</div>
+  <div class="summary-toolbar">
+    <div>
+      <div class="section-title" style="margin:0;">Monthly Overview</div>
+      <div style="font-size:13px;color:var(--gray);margin-top:4px;">Billing, collections, balances and reminders in one place</div>
+    </div>
+    <label style="font-size:13px;font-weight:700;color:var(--gray);">Month<br><input type="month" id="summaryMonth" onchange="renderSummary()"></label>
+  </div>
   <div class="summary-grid" id="summaryGrid"></div>
-  <div class="section-title">Outstanding Dues</div>
+  <div class="section-title">Monthly Status</div>
   <div class="card">
     <div class="table-wrap">
       <table id="duesTable">
         <thead><tr>
-          <th>Flat</th><th>Tenant</th><th>Latest Rent</th><th>Latest EBill</th><th>Outstanding</th>
+          <th>Flat</th><th>Tenant</th><th>Due Date</th><th>Rent</th><th>Electricity</th><th>Paid</th><th>Closing Balance</th><th>Status</th>
         </tr></thead>
         <tbody id="duesTbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="section-title">Reminders Due Now</div>
+  <div class="card">
+    <div class="reminder-note">A reminder appears after 4 full days past the flat's rent due date. The button opens WhatsApp with a prepared message; Dad reviews and taps Send.</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Flat</th><th>Tenant</th><th>Due Date</th><th>Days Late</th><th>Amount</th><th>Action</th></tr></thead>
+        <tbody id="remindersTbody"></tbody>
       </table>
     </div>
   </div>
@@ -545,6 +573,11 @@
       <div class="form-group">
         <label>Rent Start Date</label>
         <input type="date" id="nt_startDate">
+      </div>
+      <div class="form-group">
+        <label>Monthly Rent Due Day</label>
+        <input type="number" id="nt_dueDay" value="5" min="1" max="28">
+        <span class="hint">Reminder starts 4 days after this date</span>
       </div>
     </div>
     <div class="form-row">
@@ -740,6 +773,19 @@
         <button class="btn btn-primary btn-sm" onclick="startNewTenantForCurrentFlat()">➕ New Renter for This Flat</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFlat()" style="background:#7b1c1c;">🗑 Delete This Flat</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT HISTORY ENTRY MODAL -->
+<div class="modal-overlay" id="editEntryModal">
+  <div class="modal modal-wide">
+    <h3>Edit Past Transaction</h3>
+    <p style="font-size:13px;color:var(--gray);line-height:1.5;margin-top:-8px;">Saving recalculates this month and carries its closing balance through every later month. An Undo point is created first.</p>
+    <div id="editEntryForm"></div>
+    <div class="modal-footer">
+      <button class="btn" style="background:var(--border);color:#333;" onclick="closeModal('editEntryModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditedEntry()">Save &amp; Recalculate</button>
     </div>
   </div>
 </div>
@@ -953,6 +999,8 @@ function normalizeData(data) {
   if (!data || !Array.isArray(data.tenants)) return seedData();
   data.tenants.forEach(t => {
     if (!Array.isArray(t.entries)) t.entries = [];
+    t.entries.sort(compareEntries);
+    t.dueDay = normalizeDueDay(t.dueDay, t.startDate);
   });
   return data;
 }
@@ -1143,11 +1191,17 @@ function showScreen(name) {
   if (name === 'backup') renderBackupInfo();
 }
 
-function switchTab(name) {
+function switchTab(name, button = null) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  event.target.classList.add('active');
+  if (button) {
+    button.classList.add('active');
+  } else {
+    const tabIndex = { billing: 0, history: 1, send: 2, info: 3 }[name];
+    const tabs = document.querySelectorAll('#screen-tenant .tab-btn');
+    if (tabIndex !== undefined && tabs[tabIndex]) tabs[tabIndex].classList.add('active');
+  }
   if (name === 'history') renderHistory();
   if (name === 'info') renderTenantInfoForm();
   if (name === 'send') renderSendBill();
@@ -1346,6 +1400,11 @@ function saveBillingEntry() {
   const remarks = document.getElementById('b_remarks').value.trim();
 
   if (!month) { toast('Please select a month', 'error'); return; }
+  const existingMonth = (t.entries || []).find(entry => entry.month === month);
+  if (existingMonth) {
+    if (confirm(fmtMonth(month) + ' already exists. Edit that transaction instead?')) openEditEntry(existingMonth.id);
+    return;
+  }
   if (!unitFinal && unitFinal !== 0) { toast('Please enter the final meter reading', 'error'); return; }
   if (unitFinal < unitStart) { toast('Final meter reading cannot be less than start reading', 'error'); return; }
 
@@ -1375,6 +1434,7 @@ function saveBillingEntry() {
 
   if (!t.entries) t.entries = [];
   t.entries.push(entry);
+  t.entries.sort(compareEntries);
   t.elecRate = rate;
   saveData(DB, { label: 'Added billing entry for Flat ' + t.flat });
 
@@ -1397,9 +1457,12 @@ function renderHistory() {
     tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="es-icon">📋</div>No entries yet</td></tr>';
     return;
   }
-  tbody.innerHTML = [...t.entries].reverse().map(e => `
+  tbody.innerHTML = [...t.entries].reverse().map(e => {
+    const entryIndex = t.entries.findIndex(item => item.id === e.id);
+    const issues = getEntryIssues(t, entryIndex);
+    return `
     <tr>
-      <td><strong>${fmtMonth(e.month)}</strong>${e.tenantName && e.tenantName !== t.name ? `<br><small style="color:var(--gray);">Renter: ${e.tenantName}</small>` : ''}</td>
+      <td><strong>${fmtMonth(e.month)}</strong>${e.tenantName && e.tenantName !== t.name ? `<br><small style="color:var(--gray);">Renter: ${escapeHtml(e.tenantName)}</small>` : ''}${issues.length ? `<span class="math-warning">Check: ${issues.join(' · ')}</span>` : ''}</td>
       <td>₹${fmt(e.rent)}</td>
       <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.unitStart != null && e.unitFinal != null ? `${e.consumed} units × ₹${e.rate}${e.meterBill != null && e.meterBill !== e.elecBill ? ` · meter ₹${fmt(e.meterBill)}` : ''}` : 'Meter reading not recorded'}</small></td>
       <td>₹${fmt(e.totalDue)}</td>
@@ -1407,10 +1470,95 @@ function renderHistory() {
       <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : e.outstanding < 0 ? 'badge-blue' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : e.outstanding < 0 ? 'credit' : 'clear'}</span></td>
       <td>${e.payDate ? fmtDate(e.payDate) : '—'}</td>
       <td>${e.payMode || '—'}</td>
-      <td>${e.remarks || '—'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="confirmDelete(${e.id})">🗑</button></td>
+      <td>${e.remarks ? escapeHtml(e.remarks) : '—'}</td>
+      <td><div class="history-actions"><button class="btn btn-edit btn-sm" onclick="openEditEntry(${JSON.stringify(e.id)})">Edit</button><button class="btn btn-danger btn-sm" onclick="confirmDelete(${JSON.stringify(e.id)})">Delete</button></div></td>
     </tr>
-  `).join('');
+  `; }).join('');
+}
+
+let editingEntryId = null;
+
+function openEditEntry(entryId) {
+  const t = DB.tenants[currentTenantIdx];
+  if (!t) return;
+  t.entries.sort(compareEntries);
+  const entryIndex = t.entries.findIndex(entry => String(entry.id) === String(entryId));
+  if (entryIndex < 0) return;
+  const e = t.entries[entryIndex];
+  editingEntryId = e.id;
+  const previousHelp = entryIndex === 0
+    ? 'Earliest available month: enter any balance carried from before this history.'
+    : 'Automatically taken from the previous month and updated when you save.';
+  document.getElementById('editEntryForm').innerHTML = `
+    <div class="form-row">
+      <div class="form-group"><label>Month</label><input type="month" id="e_month" value="${escapeAttr(e.month || '')}"></div>
+      <div class="form-group"><label>Rent (₹)</label><input type="number" id="e_rent" value="${numberValue(e.rent)}"></div>
+      <div class="form-group"><label>Previous Balance (₹)</label><input type="number" id="e_lastOutstanding" value="${numberValue(e.lastOutstanding)}" ${entryIndex > 0 ? 'readonly' : ''}><span class="hint">${previousHelp}</span></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Start Units</label><input type="number" id="e_unitStart" value="${numberValue(e.unitStart)}" oninput="updateEditMeterBill()"></div>
+      <div class="form-group"><label>Final Units</label><input type="number" id="e_unitFinal" value="${numberValue(e.unitFinal)}" oninput="updateEditMeterBill()"></div>
+      <div class="form-group"><label>Rate (₹/unit)</label><input type="number" id="e_rate" value="${numberValue(e.rate || t.elecRate || 9)}" oninput="updateEditMeterBill()"></div>
+      <div class="form-group"><label>Electricity Bill (₹)</label><input type="number" id="e_elecBill" value="${numberValue(e.elecBill)}"><span class="hint" id="e_meterHint"></span></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Amount Paid (₹)</label><input type="number" id="e_paid" value="${numberValue(e.paid)}"></div>
+      <div class="form-group"><label>Payment Date</label><input type="date" id="e_payDate" value="${escapeAttr(e.payDate || '')}"></div>
+      <div class="form-group"><label>Payment Mode</label><select id="e_payMode">${paymentModeOptions(e.payMode)}</select></div>
+    </div>
+    <div class="form-group"><label>Remarks</label><input type="text" id="e_remarks" value="${escapeAttr(e.remarks || '')}"></div>
+  `;
+  updateEditMeterBill(false);
+  document.getElementById('editEntryModal').classList.add('open');
+}
+
+function updateEditMeterBill(updateAmount = true) {
+  const start = Number(document.getElementById('e_unitStart').value);
+  const end = Number(document.getElementById('e_unitFinal').value);
+  const rate = Number(document.getElementById('e_rate').value);
+  const valid = Number.isFinite(start) && Number.isFinite(end) && Number.isFinite(rate) && end >= start && rate >= 0;
+  const calculated = valid ? roundMoney((end - start) * rate) : null;
+  document.getElementById('e_meterHint').textContent = calculated == null ? 'Check the meter readings.' : 'Meter calculation: ₹' + fmt(calculated) + '. You may override the bill if needed.';
+  if (updateAmount && calculated != null) document.getElementById('e_elecBill').value = calculated;
+}
+
+function saveEditedEntry() {
+  const t = DB.tenants[currentTenantIdx];
+  if (!t) return;
+  const entry = t.entries.find(item => String(item.id) === String(editingEntryId));
+  if (!entry) return;
+  const month = document.getElementById('e_month').value;
+  const unitStart = Number(document.getElementById('e_unitStart').value);
+  const unitFinal = Number(document.getElementById('e_unitFinal').value);
+  const rate = Number(document.getElementById('e_rate').value);
+  const elecBill = Number(document.getElementById('e_elecBill').value);
+  if (!month) { toast('Please select a month', 'error'); return; }
+  if ((t.entries || []).some(item => item !== entry && item.month === month)) { toast(fmtMonth(month) + ' already has another entry.', 'error'); return; }
+  if (![unitStart, unitFinal, rate, elecBill].every(Number.isFinite) || unitFinal < unitStart || rate < 0 || elecBill < 0) {
+    toast('Check the meter readings, rate and electricity bill.', 'error'); return;
+  }
+  entry.month = month;
+  entry.rent = nonNegativeNumber('e_rent');
+  entry.unitStart = unitStart;
+  entry.unitFinal = unitFinal;
+  entry.consumed = unitFinal - unitStart;
+  entry.rate = rate;
+  entry.meterBill = roundMoney(entry.consumed * rate);
+  entry.elecBill = elecBill;
+  entry.paid = nonNegativeNumber('e_paid');
+  entry.payDate = document.getElementById('e_payDate').value;
+  entry.payMode = document.getElementById('e_payMode').value;
+  entry.remarks = document.getElementById('e_remarks').value.trim();
+  t.entries.sort(compareEntries);
+  const startIndex = t.entries.findIndex(item => String(item.id) === String(editingEntryId));
+  if (startIndex === 0) entry.lastOutstanding = Number(document.getElementById('e_lastOutstanding').value) || 0;
+  recalculateBalanceChain(t, startIndex);
+  t.elecRate = rate;
+  saveData(DB, { label: 'Edited ' + fmtMonth(month) + ' transaction for Flat ' + t.flat });
+  closeModal('editEntryModal');
+  openTenant(currentTenantIdx);
+  switchTab('history');
+  toast('Transaction updated and later balances recalculated.', 'success');
 }
 
 let pendingDeleteId = null;
@@ -1418,11 +1566,14 @@ function confirmDelete(entryId) {
   pendingDeleteId = entryId;
   document.getElementById('confirmDeleteBtn').onclick = () => {
     const t = DB.tenants[currentTenantIdx];
+    t.entries.sort(compareEntries);
+    const removedIndex = t.entries.findIndex(e => String(e.id) === String(entryId));
     t.entries = t.entries.filter(e => e.id !== entryId);
+    if (t.entries.length && removedIndex >= 0) recalculateBalanceChain(t, Math.max(0, removedIndex));
     saveData(DB, { label: 'Deleted billing entry for Flat ' + t.flat });
     closeModal('deleteModal');
-    renderHistory();
     openTenant(currentTenantIdx);
+    switchTab('history');
     toast('Entry deleted');
   };
   document.getElementById('deleteModal').classList.add('open');
@@ -1449,6 +1600,7 @@ function renderTenantInfoForm() {
     <div class="form-row">
       <div class="form-group"><label>Mobile Number</label><input type="tel" id="ti_mobile" value="${t.mobile || ''}"></div>
       <div class="form-group"><label>Rent Start Date</label><input type="date" id="ti_startDate" value="${t.startDate || ''}"></div>
+      <div class="form-group"><label>Monthly Rent Due Day</label><input type="number" id="ti_dueDay" min="1" max="28" value="${getDueDay(t)}"><span class="hint">Reminder appears after 4 full days</span></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Address</label><input type="text" id="ti_address" value="${t.address || ''}"></div>
@@ -1478,6 +1630,7 @@ function saveTenantInfo() {
   t.security = parseFloat(document.getElementById('ti_security').value) || 0;
   t.mobile = document.getElementById('ti_mobile').value.trim();
   t.startDate = document.getElementById('ti_startDate').value;
+  t.dueDay = normalizeDueDay(document.getElementById('ti_dueDay').value, t.startDate);
   t.address = document.getElementById('ti_address').value.trim();
   t.email = document.getElementById('ti_email').value.trim();
   t.idType = document.getElementById('ti_idType').value;
@@ -1534,6 +1687,7 @@ function resetTenantForm() {
     document.getElementById(id).value = '';
   });
   document.getElementById('nt_elecRate').value = '9';
+  document.getElementById('nt_dueDay').value = '5';
   document.getElementById('nt_idType').value = '';
   const hint = document.getElementById('newTenantHint');
   hint.textContent = '';
@@ -1547,6 +1701,7 @@ function startNewTenantForFlat(previousTenant) {
   document.getElementById('nt_rent').value = previousTenant.rent || '';
   document.getElementById('nt_meterStart').value = getLastMeter(previousTenant) || '';
   document.getElementById('nt_elecRate').value = previousTenant.elecRate || 9;
+  document.getElementById('nt_dueDay').value = getDueDay(previousTenant);
   const hint = document.getElementById('newTenantHint');
   hint.textContent = 'New renter for Flat ' + previousTenant.flat + '. Previous renter and billing history are preserved.';
   hint.style.display = 'block';
@@ -1699,6 +1854,7 @@ function addTenant() {
     security: parseFloat(document.getElementById('nt_security').value) || 0,
     mobile: document.getElementById('nt_mobile').value.trim(),
     startDate: document.getElementById('nt_startDate').value,
+    dueDay: normalizeDueDay(document.getElementById('nt_dueDay').value, document.getElementById('nt_startDate').value),
     address: document.getElementById('nt_address').value.trim(),
     email: document.getElementById('nt_email').value.trim(),
     idType: document.getElementById('nt_idType').value,
@@ -1725,43 +1881,215 @@ function addTenant() {
 // ─────────────────────────────────────────────
 function renderSummary() {
   const active = DB.tenants.filter(t => !t.checkedOut);
-  const totalRent = active.reduce((s, t) => s + t.rent, 0);
-  const totalOutstanding = active.reduce((s, t) => s + Math.max(0, getOutstanding(t)), 0);
-  const totalSecurity = active.reduce((s, t) => s + (t.security || 0), 0);
-  const withDues = active.filter(t => getOutstanding(t) > 0).length;
+  const monthInput = document.getElementById('summaryMonth');
+  if (!monthInput.value) monthInput.value = currentMonthString();
+  const month = monthInput.value;
+  const rows = active.map((tenant, tenantIndex) => ({ tenant, tenantIndex: DB.tenants.indexOf(tenant), entry: getMonthEntry(tenant, month) }));
+  const entered = rows.filter(row => row.entry);
+  const totalRent = entered.reduce((sum, row) => sum + Number(row.entry.rent || 0), 0);
+  const totalElectricity = entered.reduce((sum, row) => sum + Number(row.entry.elecBill || 0), 0);
+  const totalPaid = entered.reduce((sum, row) => sum + Number(row.entry.paid || 0), 0);
+  const totalOutstanding = entered.reduce((sum, row) => sum + Math.max(0, Number(row.entry.outstanding || 0)), 0);
+  const totalCredits = entered.reduce((sum, row) => sum + Math.max(0, -Number(row.entry.outstanding || 0)), 0);
+  const mathReview = entered.filter(row => getEntryIssues(row.tenant, row.tenant.entries.indexOf(row.entry)).length).length;
+  const reminders = getReminderCandidates(new Date());
 
   document.getElementById('summaryGrid').innerHTML = `
-    <div class="summary-card"><div class="sc-label">Active Tenants</div><div class="sc-val">${active.length}</div></div>
-    <div class="summary-card"><div class="sc-label">Monthly Rent Roll</div><div class="sc-val">₹${fmt(totalRent)}</div></div>
-    <div class="summary-card"><div class="sc-label">Total Outstanding</div><div class="sc-val" style="color:var(--red)">₹${fmt(totalOutstanding)}</div></div>
-    <div class="summary-card"><div class="sc-label">Security Held</div><div class="sc-val">₹${fmt(totalSecurity)}</div></div>
-    <div class="summary-card"><div class="sc-label">Flats with Dues</div><div class="sc-val" style="color:var(--orange)">${withDues}</div></div>
+    <div class="summary-card"><div class="sc-label">Entries Added</div><div class="sc-val">${entered.length}/${active.length}</div></div>
+    <div class="summary-card"><div class="sc-label">Rent Billed</div><div class="sc-val">₹${fmt(totalRent)}</div></div>
+    <div class="summary-card"><div class="sc-label">Electricity Billed</div><div class="sc-val">₹${fmt(totalElectricity)}</div></div>
+    <div class="summary-card"><div class="sc-label">Payments Received</div><div class="sc-val" style="color:var(--green)">₹${fmt(totalPaid)}</div></div>
+    <div class="summary-card"><div class="sc-label">Closing Dues</div><div class="sc-val" style="color:var(--red)">₹${fmt(totalOutstanding)}</div></div>
+    <div class="summary-card"><div class="sc-label">Tenant Credits</div><div class="sc-val" style="color:var(--blue)">₹${fmt(totalCredits)}</div></div>
+    <div class="summary-card"><div class="sc-label">Reminders Due Today</div><div class="sc-val" style="color:var(--orange)">${reminders.length}</div></div>
+    <div class="summary-card"><div class="sc-label">Math Checks</div><div class="sc-val" style="color:${mathReview ? 'var(--orange)' : 'var(--green)'}">${mathReview ? mathReview + ' review' : 'OK'}</div></div>
   `;
 
   const tbody = document.getElementById('duesTbody');
-  const withDuesList = active.filter(t => getOutstanding(t) > 0).sort((a, b) => getOutstanding(b) - getOutstanding(a));
-  if (withDuesList.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--green);padding:20px;font-weight:700;">✅ All tenants are clear!</td></tr>';
-    return;
-  }
-  tbody.innerHTML = withDuesList.map(t => {
-    const out = getOutstanding(t);
-    const lastEntry = t.entries && t.entries.length ? t.entries[t.entries.length - 1] : null;
-    const rentDue = lastEntry ? lastEntry.rent : 0;
-    const elecDue = lastEntry ? lastEntry.elecBill : 0;
+  tbody.innerHTML = rows.sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat)).map(row => {
+    const t = row.tenant;
+    const e = row.entry;
+    const dueDate = getDueDate(t, month);
+    const issues = e ? getEntryIssues(t, t.entries.indexOf(e)) : [];
+    let statusClass = 'status-missing';
+    let statusText = 'Not entered';
+    if (e && e.outstanding > 0) { statusClass = 'status-due'; statusText = '₹' + fmt(e.outstanding) + ' due'; }
+    else if (e && e.outstanding < 0) { statusClass = 'status-credit'; statusText = '₹' + fmt(-e.outstanding) + ' credit'; }
+    else if (e) { statusClass = 'status-paid'; statusText = 'Clear'; }
     return `<tr>
-      <td><strong>${t.flat}</strong></td>
-      <td>${t.name}</td>
-      <td>₹${fmt(rentDue)}</td>
-      <td>₹${fmt(elecDue)}</td>
-      <td><strong style="color:var(--red)">₹${fmt(out)}</strong></td>
+      <td><button class="btn btn-edit btn-sm" onclick="openTenant(${row.tenantIndex})">${escapeHtml(t.flat)}</button></td>
+      <td>${escapeHtml(t.name)}${issues.length ? `<span class="math-warning">Check: ${issues.join(' · ')}</span>` : ''}</td>
+      <td>${fmtDate(toDateInput(dueDate))}</td>
+      <td>${e ? '₹' + fmt(e.rent) : '—'}</td>
+      <td>${e ? '₹' + fmt(e.elecBill) : '—'}</td>
+      <td>${e ? '₹' + fmt(e.paid) : '—'}</td>
+      <td>${e ? formatBalance(e.outstanding) : '—'}</td>
+      <td><span class="status-pill ${statusClass}">${statusText}</span></td>
     </tr>`;
   }).join('');
+
+  const remindersBody = document.getElementById('remindersTbody');
+  if (!reminders.length) {
+    remindersBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--green);padding:20px;font-weight:700;">No reminders are due today.</td></tr>';
+  } else {
+    remindersBody.innerHTML = reminders.map(item => `<tr>
+      <td><strong>${escapeHtml(item.tenant.flat)}</strong></td>
+      <td>${escapeHtml(item.tenant.name)}</td>
+      <td>${fmtDate(toDateInput(item.dueDate))}</td>
+      <td>${item.daysLate} days</td>
+      <td>₹${fmt(item.amount)}</td>
+      <td>${item.tenant.mobile
+        ? `<button class="btn btn-whatsapp btn-sm" onclick="sendReminderForTenant(${item.tenantIndex})">WhatsApp reminder</button>`
+        : `<button class="btn btn-edit btn-sm" onclick="openTenantInfo(${item.tenantIndex})">Add mobile</button>`}</td>
+    </tr>`).join('');
+  }
 }
 
 // ─────────────────────────────────────────────
 // UTILS
 // ─────────────────────────────────────────────
+function compareEntries(a, b) {
+  const monthCompare = String(a.month || '').localeCompare(String(b.month || ''));
+  if (monthCompare) return monthCompare;
+  return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function recalculateBalanceChain(tenant, startIndex = 0) {
+  if (!tenant || !Array.isArray(tenant.entries)) return;
+  tenant.entries.sort(compareEntries);
+  for (let i = Math.max(0, startIndex); i < tenant.entries.length; i++) {
+    const entry = tenant.entries[i];
+    if (i > 0) entry.lastOutstanding = Number(tenant.entries[i - 1].outstanding) || 0;
+    entry.totalDue = roundMoney((Number(entry.rent) || 0) + (Number(entry.elecBill) || 0) + (Number(entry.lastOutstanding) || 0));
+    entry.outstanding = roundMoney(entry.totalDue - (Number(entry.paid) || 0));
+  }
+}
+
+function getEntryIssues(tenant, entryIndex) {
+  const entry = tenant && tenant.entries ? tenant.entries[entryIndex] : null;
+  if (!entry) return [];
+  const issues = [];
+  const near = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 0.01;
+  const expectedTotal = (Number(entry.rent) || 0) + (Number(entry.elecBill) || 0) + (Number(entry.lastOutstanding) || 0);
+  const expectedBalance = expectedTotal - (Number(entry.paid) || 0);
+  const expectedUnits = (Number(entry.unitFinal) || 0) - (Number(entry.unitStart) || 0);
+  if (!near(entry.totalDue, expectedTotal)) issues.push('total due');
+  if (!near(entry.outstanding, expectedBalance)) issues.push('closing balance');
+  if (expectedUnits < 0 || !near(entry.consumed, expectedUnits)) issues.push('meter units');
+  if (entry.meterBill != null && !near(entry.elecBill, entry.meterBill)) issues.push('bill vs meter');
+  if (entryIndex > 0 && !near(entry.lastOutstanding, tenant.entries[entryIndex - 1].outstanding)) issues.push('carry-forward');
+  if (entryIndex > 0 && Number(entry.unitStart) && Number(tenant.entries[entryIndex - 1].unitFinal) && !near(entry.unitStart, tenant.entries[entryIndex - 1].unitFinal)) issues.push('meter carry-forward');
+  if (tenant.entries.some((item, index) => index !== entryIndex && item.month === entry.month)) issues.push('duplicate month');
+  return issues;
+}
+
+function normalizeDueDay(value, startDate = '') {
+  const requested = Number.parseInt(value, 10);
+  if (Number.isInteger(requested) && requested >= 1 && requested <= 28) return requested;
+  const startDay = /^\d{4}-\d{2}-(\d{2})$/.exec(String(startDate || ''));
+  if (startDay) return Math.min(28, Math.max(1, Number(startDay[1])));
+  return 5;
+}
+
+function getDueDay(tenant) {
+  return normalizeDueDay(tenant && tenant.dueDay, tenant && tenant.startDate);
+}
+
+function currentMonthString(date = new Date()) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+}
+
+function getMonthEntry(tenant, month) {
+  return (tenant.entries || []).find(entry => entry.month === month) || null;
+}
+
+function getDueDate(tenant, month) {
+  const parts = String(month || currentMonthString()).split('-').map(Number);
+  return new Date(parts[0], Math.max(0, parts[1] - 1), getDueDay(tenant), 12, 0, 0, 0);
+}
+
+function getBalanceBeforeMonth(tenant, month) {
+  const earlier = (tenant.entries || []).filter(entry => String(entry.month || '') < month).sort(compareEntries);
+  return earlier.length ? Number(earlier[earlier.length - 1].outstanding) || 0 : 0;
+}
+
+function getReminderCandidates(now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+  const month = currentMonthString(today);
+  return DB.tenants.map((tenant, tenantIndex) => {
+    if (tenant.checkedOut) return null;
+    const dueDate = getDueDate(tenant, month);
+    const daysLate = Math.floor((today - dueDate) / 86400000);
+    if (daysLate < 4) return null;
+    const entry = getMonthEntry(tenant, month);
+    const amount = entry
+      ? Math.max(0, Number(entry.outstanding) || 0)
+      : Math.max(0, (Number(tenant.rent) || 0) + getBalanceBeforeMonth(tenant, month));
+    if (amount <= 0) return null;
+    return { tenant, tenantIndex, dueDate, daysLate, amount, entry, month };
+  }).filter(Boolean).sort((a, b) => b.daysLate - a.daysLate || b.amount - a.amount);
+}
+
+function buildReminderMessage(item) {
+  const detail = item.entry
+    ? `The pending balance for ${fmtMonth(item.month)} is ₹${fmt(item.amount)}.`
+    : `The rent entry for ${fmtMonth(item.month)} is still pending. The current rent/balance is ₹${fmt(item.amount)}.`;
+  return `Hello ${item.tenant.name},\n\nThis is a friendly reminder for Flat ${item.tenant.flat}. Rent was due on ${fmtDate(toDateInput(item.dueDate))}. ${detail}\n\nPlease arrange payment or share the payment details if already paid.\n\nThank you,\nJasmine Residency`;
+}
+
+function sendReminderForTenant(tenantIndex) {
+  const item = getReminderCandidates(new Date()).find(candidate => candidate.tenantIndex === tenantIndex);
+  if (!item) { toast('This tenant does not currently need a reminder.', 'error'); return; }
+  const mobile = String(item.tenant.mobile || '').replace(/\D/g, '');
+  if (mobile.length < 10) { toast('Add a valid tenant mobile number first.', 'error'); openTenantInfo(tenantIndex); return; }
+  const number = mobile.length === 10 ? '91' + mobile : mobile;
+  window.open('https://wa.me/' + number + '?text=' + encodeURIComponent(buildReminderMessage(item)), '_blank');
+}
+
+function openTenantInfo(tenantIndex) {
+  openTenant(tenantIndex);
+  switchTab('info');
+}
+
+function formatBalance(value) {
+  const amount = Number(value) || 0;
+  if (amount > 0) return `<strong style="color:var(--red)">₹${fmt(amount)} due</strong>`;
+  if (amount < 0) return `<strong style="color:var(--blue)">₹${fmt(-amount)} credit</strong>`;
+  return '<strong style="color:var(--green)">Clear</strong>';
+}
+
+function naturalFlatCompare(a, b) {
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function numberValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function nonNegativeNumber(id) {
+  const number = Number(document.getElementById(id).value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+function paymentModeOptions(selected = '') {
+  const modes = ['', 'Cash', 'Online Transfer', 'HDFC Bank', 'IDFC Bank', 'PhonePe', 'Google Pay', 'Paytm', 'Cheque'];
+  if (selected && !modes.includes(selected)) modes.push(selected);
+  return modes.map(mode => `<option value="${escapeAttr(mode)}" ${mode === selected ? 'selected' : ''}>${mode || 'Select…'}</option>`).join('');
+}
+
 function fmt(n) {
   return Number(n || 0).toLocaleString('en-IN');
 }
