@@ -972,7 +972,7 @@ const AUDITED_INDIVIDUAL_JULY = Object.freeze({
   '207': { elecBill: 1674, meterBill: 1674, source: 'Individual sheet 207 row 90' },
   '208': { elecBill: 549, meterBill: 549, source: 'Individual sheet 208 row 139' },
   '209': { elecBill: 2025, meterBill: 2025, source: 'Individual sheet 209 row 84' },
-  '301': { elecBill: 648, meterBill: 648, source: 'Individual sheet 301 row 121' },
+  '301': { elecBill: 648, meterBill: 648, lastOutstanding: -18, source: 'Individual sheet 301 row 121' },
   '302': { elecBill: 648, meterBill: 648, source: 'Individual sheet 302 row 55' },
   '303': { elecBill: 4545, meterBill: 4545, source: 'Individual sheet 303 row 90' },
   '304': { elecBill: 2169, meterBill: 2169, source: 'Individual sheet 304 row 93' },
@@ -1009,6 +1009,26 @@ function applyAuditedIndividualJulySeed(data) {
   return data;
 }
 
+// Room 301's monthly summary sheets omitted or folded prior credits into the
+// electricity column. These values come from the individual flat sheet, where
+// each month's closing balance is explicitly carried into the following month.
+const AUDITED_ROOM_301_HISTORY = Object.freeze({
+  '2026-04': { elecBill: 450, meterBill: 450, lastOutstanding: -149, totalDue: 8301, outstanding: -199, ebillMonth: '2026-03', source: 'Individual sheet 301 row 118' },
+  '2026-05': { elecBill: 1350, meterBill: 1350, lastOutstanding: -199, totalDue: 9151, outstanding: -49, ebillMonth: '2026-04', source: 'Individual sheet 301 row 119' },
+  '2026-06': { elecBill: 2151, meterBill: 2151, lastOutstanding: -49, totalDue: 10102, outstanding: -18, ebillMonth: '2026-05', source: 'Individual sheet 301 row 120' },
+  '2026-07': { elecBill: 648, meterBill: 648, lastOutstanding: -18, totalDue: 8630, outstanding: -70, ebillMonth: '2026-06', source: 'Individual sheet 301 row 121' }
+});
+
+function applyAuditedRoom301History(data) {
+  const tenant = data.tenants.find(item => String(item.flat) === '301');
+  if (!tenant) return data;
+  Object.entries(AUDITED_ROOM_301_HISTORY).forEach(([month, correction]) => {
+    const entry = (tenant.entries || []).find(item => item.month === month);
+    if (entry) Object.assign(entry, correction);
+  });
+  return data;
+}
+
 function seedData() {
   return applyAuditedIndividualJulySeed(applyHistorySeed({ tenants: getDefaultTenants(), schemaVersion: 4 }));
 }
@@ -1040,7 +1060,7 @@ function mergeHistoryIntoTenant(tenant) {
 
 function applyHistorySeed(data) {
   data.tenants.forEach(mergeHistoryIntoTenant);
-  return data;
+  return applyAuditedRoom301History(data);
 }
 
 function migrateLegacyData(data) {
@@ -1056,7 +1076,7 @@ function migrateLegacyData(data) {
   });
 
   migrated.schemaVersion = 4;
-  return migrated;
+  return applyAuditedRoom301History(migrated);
 }
 
 let DB = loadData();
