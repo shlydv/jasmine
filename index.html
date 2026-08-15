@@ -394,6 +394,48 @@
     font-size: 15px;
   }
 
+  /* ── REPORTS & PRINTING ── */
+  .rep-intro { color: var(--gray); font-size: 14px; margin: 6px 0 16px; line-height: 1.6; }
+  .rep-picker { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; font-size: 13px; font-weight: 700; color: var(--gray); }
+  .rep-picker select, .rep-picker input { display: block; margin-top: 4px; padding: 9px 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; background: white; font-weight: 600; color: #222; max-width: 100%; }
+  .rep-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .rep-hint { margin-top: 10px; font-size: 13px; color: var(--gray); line-height: 1.6; }
+  .rep-doc { color: #111; font-size: 13px; overflow-x: auto; }
+  .rep-head { text-align: center; border-bottom: 2px solid var(--blue); padding-bottom: 10px; margin-bottom: 14px; }
+  .rep-brand { font-size: 20px; font-weight: 700; color: var(--blue); }
+  .rep-addr { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .rep-title { font-size: 16px; font-weight: 700; margin-top: 8px; }
+  .rep-sub { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .rep-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .rep-fact { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; }
+  .rep-fact span { display: block; font-size: 11px; color: var(--gray); }
+  .rep-fact strong { font-size: 15px; }
+  .rep-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rep-table th, .rep-table td { border: 1px solid #bbb; padding: 5px 6px; text-align: right; }
+  .rep-table th { background: #eef3fa; font-weight: 700; }
+  .rep-table .tl { text-align: left; }
+  .rep-table tfoot td { font-weight: 700; background: #f4f6f9; }
+  .rep-note { font-size: 12px; color: var(--gray); margin-top: 10px; line-height: 1.6; }
+  .rep-sign { margin-top: 40px; display: flex; justify-content: space-between; gap: 20px; font-size: 12px; color: var(--gray); }
+  .rep-sign div { border-top: 1px solid #888; padding-top: 4px; min-width: 170px; text-align: center; }
+  .rep-foot { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 11px; color: var(--gray); text-align: center; }
+  .rep-due { color: var(--red); font-weight: 700; }
+  .rep-credit { color: var(--blue); font-weight: 700; }
+
+  #printArea { display: none; }
+  @media print {
+    body { background: #fff; font-size: 12px; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block; }
+    .rep-doc { overflow: visible; }
+    .rep-table { font-size: 10px; }
+    .rep-table th, .rep-table td { padding: 3px 4px; }
+    .rep-facts { grid-template-columns: repeat(4, 1fr); }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    @page { margin: 12mm; }
+  }
+
   @media (max-width: 500px) {
     header h1 { font-size: 17px; }
     .flat-card .flat-num { font-size: 20px; }
@@ -428,6 +470,7 @@
 <nav>
   <button class="nav-btn active" onclick="showScreen('home')">🏠 All Flats</button>
   <button class="nav-btn" onclick="showScreen('summary')">📊 Summary</button>
+  <button class="nav-btn" onclick="showScreen('reports')">📄 Reports</button>
   <button class="nav-btn" onclick="showScreen('addTenant')">➕ Add Tenant</button>
   <button class="nav-btn" onclick="showScreen('backup')">💾 Backup</button>
 </nav>
@@ -453,7 +496,13 @@
       <div class="section-title" style="margin:0;">Monthly Overview</div>
       <div style="font-size:13px;color:var(--gray);margin-top:4px;">Billing, collections, balances and reminders in one place</div>
     </div>
-    <label style="font-size:13px;font-weight:700;color:var(--gray);">Month<br><input type="month" id="summaryMonth" onchange="renderSummary()"></label>
+    <div style="display:flex; align-items:end; gap:12px; flex-wrap:wrap;">
+      <label style="font-size:13px;font-weight:700;color:var(--gray);">Month<br><input type="month" id="summaryMonth" onchange="renderSummary()"></label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" type="button" onclick="printMonthFromSummary()">🖨 Print / PDF</button>
+        <button class="btn btn-success btn-sm" type="button" onclick="downloadMonthFromSummary()">⬇ Excel</button>
+      </div>
+    </div>
   </div>
   <div class="summary-grid" id="summaryGrid"></div>
   <div class="section-title">Monthly Status</div>
@@ -477,6 +526,44 @@
       </table>
     </div>
   </div>
+</div>
+
+<!-- REPORTS SCREEN -->
+<div id="screen-reports" class="screen">
+  <div class="section-title" style="margin-top:20px;">📄 Reports &amp; Downloads</div>
+  <p class="rep-intro">
+    Pick a report below, then <strong>Print</strong> it or download it as an <strong>Excel file</strong>
+    that opens in Google Sheets or Excel on the phone. On the phone, choose <strong>Save as PDF</strong>
+    in the print screen to keep or share a PDF copy.
+  </p>
+
+  <div class="card">
+    <div class="rep-picker">
+      <label>Report
+        <select id="reportType" onchange="onReportTypeChange()">
+          <option value="month">All rooms — one month</option>
+          <option value="tenant">One room — full payment record</option>
+          <option value="ledger">All rooms — full record (every month)</option>
+        </select>
+      </label>
+      <label id="reportMonthWrap">Month
+        <input type="month" id="reportMonth" onchange="renderReport()">
+      </label>
+      <label id="reportFlatWrap" style="display:none;">Room
+        <select id="reportFlat" onchange="renderReport()"></select>
+      </label>
+    </div>
+    <div class="rep-actions">
+      <button class="btn btn-primary" type="button" onclick="printCurrentReport()">🖨 Print / Save as PDF</button>
+      <button class="btn btn-success" type="button" onclick="downloadCurrentReport()">⬇ Download Excel file</button>
+      <button class="btn btn-whatsapp" type="button" id="reportShareBtn" style="display:none; font-size:15px;" onclick="shareCurrentReport()">📲 Send on WhatsApp</button>
+      <button class="btn btn-copy btn-sm" type="button" id="reportCopyBtn" style="display:none;" onclick="copyCurrentReport()">📋 Copy text</button>
+    </div>
+    <div class="rep-hint" id="reportHint"></div>
+  </div>
+
+  <div class="section-title">Preview — this is exactly what prints</div>
+  <div class="card"><div id="reportPreview" class="rep-doc"></div></div>
 </div>
 
 <!-- BACKUP SCREEN -->
@@ -732,7 +819,13 @@
   <!-- HISTORY TAB -->
   <div class="tab-panel" id="tab-history">
     <div class="card">
-      <h3>📋 Transaction History</h3>
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:6px;">
+        <h3 style="margin:0;">📋 Transaction History</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" type="button" onclick="printStatementForCurrentTenant()">🖨 Print statement / PDF</button>
+          <button class="btn btn-success btn-sm" type="button" onclick="downloadStatementForCurrentTenant()">⬇ Excel</button>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead><tr>
@@ -829,6 +922,7 @@
 </div>
 
 <div id="toast"></div>
+<div id="printArea" class="rep-doc"></div>
 
 <script src="./history_data.js"></script>
 <script>
@@ -1184,10 +1278,11 @@ function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const map = { home: 0, summary: 1, addTenant: 2, backup: 3 };
+  const map = { home: 0, summary: 1, reports: 2, addTenant: 3, backup: 4 };
   if (map[name] !== undefined) document.querySelectorAll('.nav-btn')[map[name]].classList.add('active');
   if (name === 'home') renderHome();
   if (name === 'summary') renderSummary();
+  if (name === 'reports') renderReport();
   if (name === 'backup') renderBackupInfo();
 }
 
@@ -2118,6 +2213,768 @@ function toast(msg, type = '') {
   el.className = 'show ' + type;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ─────────────────────────────────────────────
+// REPORTS — PRINT / PDF / EXCEL
+// ─────────────────────────────────────────────
+const PROPERTY_NAME = 'Jasmine Residency';
+const PROPERTY_ADDRESS = 'Sikanderpur (Badha) Sector 85, Gurugram';
+
+function money(value) {
+  return '₹' + fmt(Math.round(Number(value) || 0));
+}
+
+// Signed balance for a report cell: due in red, credit in blue, zero as "Clear".
+function balanceCell(value) {
+  const amount = Number(value) || 0;
+  if (amount > 0) return `<span class="rep-due">${money(amount)} due</span>`;
+  if (amount < 0) return `<span class="rep-credit">${money(-amount)} credit</span>`;
+  return 'Clear';
+}
+
+function electricityCell(entry) {
+  if (!entry) return '—';
+  const detail = entry.unitStart != null && entry.unitFinal != null
+    ? `<br><small style="color:#666;">${fmt(entry.consumed)} units × ₹${entry.rate}</small>`
+    : '';
+  return money(entry.elecBill) + detail;
+}
+
+function reportHead(title, subtitle) {
+  return `<div class="rep-head">
+    <div class="rep-brand">${PROPERTY_NAME}</div>
+    <div class="rep-addr">${PROPERTY_ADDRESS}</div>
+    <div class="rep-title">${escapeHtml(title)}</div>
+    ${subtitle ? `<div class="rep-sub">${escapeHtml(subtitle)}</div>` : ''}
+  </div>`;
+}
+
+function reportFoot(note = '') {
+  const stamp = new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return `<div class="rep-foot">Generated on ${escapeHtml(stamp)} · ${PROPERTY_NAME} Rent Manager${note ? ' · ' + escapeHtml(note) : ''}</div>`;
+}
+
+// Rooms shown in a month report: everyone still renting, plus anyone who has an
+// entry that month (so a tenant who checked out mid-year still appears in it).
+function getMonthReportRows(month) {
+  return DB.tenants
+    .map((tenant, tenantIndex) => ({ tenant, tenantIndex, entry: getMonthEntry(tenant, month) }))
+    .filter(row => !row.tenant.checkedOut || row.entry)
+    .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat));
+}
+
+function monthReportTotals(rows) {
+  const totals = { rent: 0, elec: 0, totalDue: 0, paid: 0, dues: 0, credits: 0, entered: 0 };
+  rows.forEach(({ entry }) => {
+    if (!entry) return;
+    totals.entered += 1;
+    totals.rent += Number(entry.rent) || 0;
+    totals.elec += Number(entry.elecBill) || 0;
+    totals.totalDue += Number(entry.totalDue) || 0;
+    totals.paid += Number(entry.paid) || 0;
+    totals.dues += Math.max(0, Number(entry.outstanding) || 0);
+    totals.credits += Math.max(0, -(Number(entry.outstanding) || 0));
+  });
+  return totals;
+}
+
+function buildMonthReportDoc(month) {
+  const rows = getMonthReportRows(month);
+  const totals = monthReportTotals(rows);
+
+  const body = rows.map(({ tenant, entry }) => {
+    const status = !entry ? 'Not entered'
+      : entry.outstanding > 0 ? 'Due'
+      : entry.outstanding < 0 ? 'Credit' : 'Paid';
+    return `<tr>
+      <td class="tl"><strong>${escapeHtml(tenant.flat)}</strong></td>
+      <td class="tl">${escapeHtml(entry && entry.tenantName ? entry.tenantName : tenant.name)}</td>
+      <td>${entry ? money(entry.rent) : '—'}</td>
+      <td>${electricityCell(entry)}</td>
+      <td>${entry ? money(entry.lastOutstanding) : '—'}</td>
+      <td>${entry ? money(entry.totalDue) : '—'}</td>
+      <td>${entry ? money(entry.paid) : '—'}</td>
+      <td>${entry && entry.payDate ? fmtDate(entry.payDate) : '—'}</td>
+      <td>${entry ? balanceCell(entry.outstanding) : '—'}</td>
+      <td class="tl">${status}</td>
+    </tr>`;
+  }).join('');
+
+  return `${reportHead('Monthly Rent & Electricity Report', fmtMonth(month))}
+    <div class="rep-facts">
+      <div class="rep-fact"><span>Rooms in report</span><strong>${rows.length}</strong></div>
+      <div class="rep-fact"><span>Entries added</span><strong>${totals.entered} of ${rows.length}</strong></div>
+      <div class="rep-fact"><span>Rent billed</span><strong>${money(totals.rent)}</strong></div>
+      <div class="rep-fact"><span>Electricity billed</span><strong>${money(totals.elec)}</strong></div>
+      <div class="rep-fact"><span>Collected</span><strong>${money(totals.paid)}</strong></div>
+      <div class="rep-fact"><span>Outstanding</span><strong>${money(totals.dues)}</strong></div>
+      <div class="rep-fact"><span>Tenant credits</span><strong>${money(totals.credits)}</strong></div>
+    </div>
+    <table class="rep-table">
+      <thead><tr>
+        <th class="tl">Room</th><th class="tl">Tenant</th><th>Rent</th><th>Electricity</th>
+        <th>Previous</th><th>Total Due</th><th>Paid</th><th>Pay Date</th><th>Closing Balance</th><th class="tl">Status</th>
+      </tr></thead>
+      <tbody>${body || '<tr><td colspan="10" style="text-align:center;padding:18px;">No rooms to show for this month.</td></tr>'}</tbody>
+      <tfoot><tr>
+        <td class="tl" colspan="2">Total</td>
+        <td>${money(totals.rent)}</td><td>${money(totals.elec)}</td><td></td>
+        <td>${money(totals.totalDue)}</td><td>${money(totals.paid)}</td><td></td>
+        <td>${money(totals.dues - totals.credits)}</td><td></td>
+      </tr></tfoot>
+    </table>
+    <div class="rep-note">Previous = balance carried in from the earlier month. Closing Balance = what the room owes (due) or has paid in advance (credit) after this month.</div>
+    ${reportFoot()}`;
+}
+
+function tenantStatementTotals(tenant) {
+  const entries = tenant.entries || [];
+  const totals = { rent: 0, elec: 0, paid: 0 };
+  entries.forEach(entry => {
+    totals.rent += Number(entry.rent) || 0;
+    totals.elec += Number(entry.elecBill) || 0;
+    totals.paid += Number(entry.paid) || 0;
+  });
+  totals.billed = totals.rent + totals.elec;
+  totals.closing = entries.length ? Number(entries[entries.length - 1].outstanding) || 0 : 0;
+  return totals;
+}
+
+function buildTenantStatementDoc(tenantIndex) {
+  const tenant = DB.tenants[tenantIndex];
+  if (!tenant) return '<div class="empty-state">Select a room to see its payment record.</div>';
+  const entries = [...(tenant.entries || [])].sort(compareEntries);
+  const totals = tenantStatementTotals(tenant);
+  const period = entries.length ? `${fmtMonth(entries[0].month)} to ${fmtMonth(entries[entries.length - 1].month)}` : 'No entries recorded yet';
+
+  const body = entries.map(entry => `<tr>
+      <td class="tl"><strong>${fmtMonth(entry.month)}</strong>${entry.tenantName && entry.tenantName !== tenant.name ? `<br><small style="color:#666;">${escapeHtml(entry.tenantName)}</small>` : ''}</td>
+      <td>${money(entry.rent)}</td>
+      <td>${electricityCell(entry)}</td>
+      <td>${money(entry.lastOutstanding)}</td>
+      <td>${money(entry.totalDue)}</td>
+      <td>${money(entry.paid)}</td>
+      <td>${entry.payDate ? fmtDate(entry.payDate) : '—'}</td>
+      <td class="tl">${escapeHtml(entry.payMode || '—')}</td>
+      <td>${balanceCell(entry.outstanding)}</td>
+    </tr>`).join('');
+
+  return `${reportHead('Tenant Payment Record', `Room ${tenant.flat} · ${tenant.name}`)}
+    <div class="rep-facts">
+      <div class="rep-fact"><span>Room</span><strong>${escapeHtml(tenant.flat)}</strong></div>
+      <div class="rep-fact"><span>Tenant</span><strong>${escapeHtml(tenant.name)}</strong></div>
+      <div class="rep-fact"><span>Monthly rent</span><strong>${money(tenant.rent)}</strong></div>
+      <div class="rep-fact"><span>Security deposit</span><strong>${money(tenant.security || 0)}</strong></div>
+      ${tenant.mobile ? `<div class="rep-fact"><span>Mobile</span><strong>${escapeHtml(tenant.mobile)}</strong></div>` : ''}
+      ${tenant.startDate ? `<div class="rep-fact"><span>Tenant since</span><strong>${fmtDate(tenant.startDate)}</strong></div>` : ''}
+      <div class="rep-fact"><span>Rent due day</span><strong>${getDueDay(tenant)} of each month</strong></div>
+      <div class="rep-fact"><span>Record period</span><strong>${escapeHtml(period)}</strong></div>
+    </div>
+    <table class="rep-table">
+      <thead><tr>
+        <th class="tl">Month</th><th>Rent</th><th>Electricity</th><th>Previous</th>
+        <th>Total Due</th><th>Paid</th><th>Pay Date</th><th class="tl">Mode</th><th>Closing Balance</th>
+      </tr></thead>
+      <tbody>${body || '<tr><td colspan="9" style="text-align:center;padding:18px;">No billing entries recorded for this room yet.</td></tr>'}</tbody>
+      <tfoot><tr>
+        <td class="tl">Total</td>
+        <td>${money(totals.rent)}</td><td>${money(totals.elec)}</td><td></td>
+        <td>${money(totals.billed)}</td><td>${money(totals.paid)}</td><td colspan="2"></td>
+        <td>${balanceCell(totals.closing)}</td>
+      </tr></tfoot>
+    </table>
+    <div class="rep-note">
+      Total billed (rent + electricity): <strong>${money(totals.billed)}</strong> ·
+      Total received: <strong>${money(totals.paid)}</strong> ·
+      Balance as on ${fmtDate(toDateInput(new Date()))}: <strong>${balanceCell(totals.closing)}</strong><br>
+      Electricity is charged on the meter reading difference at the agreed rate per unit.
+    </div>
+    <div class="rep-sign"><div>Tenant signature</div><div>For ${PROPERTY_NAME}</div></div>
+    ${reportFoot('Tenant copy')}`;
+}
+
+function buildLedgerDoc() {
+  const rows = [];
+  [...DB.tenants].sort((a, b) => naturalFlatCompare(a.flat, b.flat)).forEach(tenant => {
+    [...(tenant.entries || [])].sort(compareEntries).forEach(entry => rows.push({ tenant, entry }));
+  });
+  const totals = { rent: 0, elec: 0, paid: 0 };
+  rows.forEach(({ entry }) => {
+    totals.rent += Number(entry.rent) || 0;
+    totals.elec += Number(entry.elecBill) || 0;
+    totals.paid += Number(entry.paid) || 0;
+  });
+
+  const body = rows.map(({ tenant, entry }) => `<tr>
+      <td class="tl"><strong>${escapeHtml(tenant.flat)}</strong></td>
+      <td class="tl">${escapeHtml(entry.tenantName || tenant.name)}</td>
+      <td class="tl">${fmtMonth(entry.month)}</td>
+      <td>${money(entry.rent)}</td>
+      <td>${money(entry.elecBill)}</td>
+      <td>${money(entry.lastOutstanding)}</td>
+      <td>${money(entry.totalDue)}</td>
+      <td>${money(entry.paid)}</td>
+      <td>${entry.payDate ? fmtDate(entry.payDate) : '—'}</td>
+      <td>${balanceCell(entry.outstanding)}</td>
+    </tr>`).join('');
+
+  return `${reportHead('Complete Rent Record — All Rooms', `${rows.length} entries across ${DB.tenants.length} rooms`)}
+    <div class="rep-facts">
+      <div class="rep-fact"><span>Rooms</span><strong>${DB.tenants.length}</strong></div>
+      <div class="rep-fact"><span>Entries</span><strong>${rows.length}</strong></div>
+      <div class="rep-fact"><span>Rent billed</span><strong>${money(totals.rent)}</strong></div>
+      <div class="rep-fact"><span>Electricity billed</span><strong>${money(totals.elec)}</strong></div>
+      <div class="rep-fact"><span>Total received</span><strong>${money(totals.paid)}</strong></div>
+    </div>
+    <table class="rep-table">
+      <thead><tr>
+        <th class="tl">Room</th><th class="tl">Tenant</th><th class="tl">Month</th><th>Rent</th><th>Electricity</th>
+        <th>Previous</th><th>Total Due</th><th>Paid</th><th>Pay Date</th><th>Closing Balance</th>
+      </tr></thead>
+      <tbody>${body || '<tr><td colspan="10" style="text-align:center;padding:18px;">No billing entries recorded yet.</td></tr>'}</tbody>
+    </table>
+    ${reportFoot()}`;
+}
+
+// ── WhatsApp / plain-text version of a tenant's record ──
+function buildTenantStatementText(tenantIndex) {
+  const tenant = DB.tenants[tenantIndex];
+  if (!tenant) return '';
+  const entries = [...(tenant.entries || [])].sort(compareEntries);
+  const totals = tenantStatementTotals(tenant);
+  const lines = entries.map(entry => {
+    const balance = Number(entry.outstanding) || 0;
+    const balanceText = balance > 0 ? `Balance ₹${fmt(balance)} due` : balance < 0 ? `Balance ₹${fmt(-balance)} credit` : 'Clear';
+    return `${fmtMonth(entry.month)}: Rent ₹${fmt(entry.rent)} + Electricity ₹${fmt(entry.elecBill)} = ₹${fmt(entry.totalDue)} | Paid ₹${fmt(entry.paid)}${entry.payDate ? ' on ' + fmtDate(entry.payDate) : ''} | ${balanceText}`;
+  });
+  const closing = totals.closing > 0
+    ? `₹${fmt(totals.closing)} due`
+    : totals.closing < 0 ? `₹${fmt(-totals.closing)} advance` : 'Clear — nothing pending';
+
+  return `${PROPERTY_NAME} — Payment Record
+Room ${tenant.flat} · ${tenant.name}
+
+${lines.length ? lines.join('\n') : 'No billing entries recorded yet.'}
+
+Total billed: ₹${fmt(totals.billed)}
+Total received: ₹${fmt(totals.paid)}
+Balance as on ${fmtDate(toDateInput(new Date()))}: ${closing}`;
+}
+
+// ── EXCEL (.xlsx) ──
+// A real spreadsheet rather than CSV: Google Sheets and Excel open it on the
+// phone with bold headers, a frozen header row, sensible column widths and
+// money/date formatting intact. An .xlsx is a ZIP of XML parts, so it is
+// written directly here — no library, which keeps the app fully offline.
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const XS = { plain: 0, title: 1, head: 2, money: 3, date: 4, totalMoney: 5, cell: 6, label: 7, totalText: 8 };
+
+function xText(value, style = XS.cell) {
+  return { t: 's', s: style, v: value == null ? '' : String(value) };
+}
+
+function xNum(value, style = XS.money) {
+  const number = Number(value);
+  return Number.isFinite(number) ? { t: 'n', s: style, v: number } : xText('', style);
+}
+
+// Excel counts days from 1899-12-30, so this lands as a real date cell.
+function excelSerial(iso) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!parts) return null;
+  return (Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])) - Date.UTC(1899, 11, 30)) / 86400000;
+}
+
+function xDate(iso, style = XS.date) {
+  const serial = excelSerial(iso);
+  return serial == null ? xText('', XS.cell) : { t: 'n', s: style, v: serial };
+}
+
+
+function xmlEscape(value) {
+  return String(value)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function colLetter(index) {
+  let letters = '';
+  let n = index;
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    n = (n - remainder - 1) / 26;
+  }
+  return letters;
+}
+
+// Excel rejects these characters in a tab name and caps it at 31 characters.
+function uniqueSheetName(name, taken) {
+  const base = String(name || 'Sheet').replace(/[\\\/\?\*\[\]:]/g, '-').slice(0, 31) || 'Sheet';
+  let candidate = base;
+  let counter = 2;
+  while (taken.includes(candidate)) {
+    const suffix = ' (' + counter++ + ')';
+    candidate = base.slice(0, 31 - suffix.length) + suffix;
+  }
+  taken.push(candidate);
+  return candidate;
+}
+
+function sheetXml(sheet) {
+  const rows = sheet.rows.map((cells, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    const body = (cells || []).map((cell, colIndex) => {
+      if (cell == null) return '';
+      const ref = colLetter(colIndex + 1) + rowNumber;
+      const style = cell.s ? ` s="${cell.s}"` : '';
+      if (cell.t === 'n') return `<c r="${ref}"${style}><v>${cell.v}</v></c>`;
+      if (cell.v === '') return `<c r="${ref}"${style}/>`;
+      return `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cell.v)}</t></is></c>`;
+    }).join('');
+    return `<row r="${rowNumber}">${body}</row>`;
+  }).join('');
+
+  const cols = (sheet.cols || [])
+    .map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`)
+    .join('');
+  const view = sheet.freeze
+    ? `<sheetView workbookViewId="0"><pane ySplit="${sheet.freeze}" topLeftCell="A${sheet.freeze + 1}" activePane="bottomLeft" state="frozen"/></sheetView>`
+    : '<sheetView workbookViewId="0"/>';
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews>${view}</sheetViews>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${rows}</sheetData></worksheet>`;
+}
+
+// Style slots referenced by XS above: plain, title, header, money, date,
+// total money, bordered cell, bold label, total text.
+function stylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="dd-mmm-yyyy"/></numFmts>
+<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FF1A6FC4"/><name val="Calibri"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEEF3FA"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFB0B0B0"/></left><right style="thin"><color rgb="FFB0B0B0"/></right><top style="thin"><color rgb="FFB0B0B0"/></top><bottom style="thin"><color rgb="FFB0B0B0"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="9">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="1" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+</cellXfs></styleSheet>`;
+}
+
+// ── Minimal ZIP writer (stored, no compression) ──
+function crc32(bytes) {
+  let table = crc32.table;
+  if (!table) {
+    table = crc32.table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let value = i;
+      for (let bit = 0; bit < 8; bit++) value = (value & 1) ? (0xEDB88320 ^ (value >>> 1)) : (value >>> 1);
+      table[i] = value >>> 0;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zipBlob(files, mime) {
+  const encoder = new TextEncoder();
+  const body = [];
+  const directory = [];
+  let offset = 0;
+
+  files.forEach(file => {
+    const nameBytes = encoder.encode(file.name);
+    const data = encoder.encode(file.text);
+    const crc = crc32(data);
+
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint16(6, 0x0800, true); // UTF-8 names
+    local.setUint16(8, 0, true);      // stored, no compression
+    local.setUint16(12, 0x21, true);  // 1980-01-01
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, nameBytes.length, true);
+    body.push(new Uint8Array(local.buffer), nameBytes, data);
+
+    const entry = new DataView(new ArrayBuffer(46));
+    entry.setUint32(0, 0x02014b50, true);
+    entry.setUint16(4, 20, true);
+    entry.setUint16(6, 20, true);
+    entry.setUint16(8, 0x0800, true);
+    entry.setUint16(10, 0, true);
+    entry.setUint16(14, 0x21, true);
+    entry.setUint32(16, crc, true);
+    entry.setUint32(20, data.length, true);
+    entry.setUint32(24, data.length, true);
+    entry.setUint16(28, nameBytes.length, true);
+    entry.setUint32(42, offset, true);
+    directory.push(new Uint8Array(entry.buffer), nameBytes);
+
+    offset += 30 + nameBytes.length + data.length;
+  });
+
+  const directorySize = directory.reduce((sum, part) => sum + part.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, directorySize, true);
+  end.setUint32(16, offset, true);
+
+  return new Blob(body.concat(directory, [new Uint8Array(end.buffer)]), { type: mime });
+}
+
+function workbookBlob(sheets) {
+  const taken = [];
+  const named = sheets.map(sheet => Object.assign({}, sheet, { tab: uniqueSheetName(sheet.name, taken) }));
+  const stylesRel = 'rId' + (named.length + 1);
+
+  const files = [
+    {
+      name: '[Content_Types].xml',
+      text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${named.map((sheet, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`
+    },
+    {
+      name: '_rels/.rels',
+      text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`
+    },
+    {
+      name: 'xl/workbook.xml',
+      text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${named.map((sheet, index) => `<sheet name="${xmlEscape(sheet.tab)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join('')}</sheets></workbook>`
+    },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${named.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join('')}<Relationship Id="${stylesRel}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`
+    },
+    { name: 'xl/styles.xml', text: stylesXml() }
+  ];
+
+  named.forEach((sheet, index) => files.push({ name: `xl/worksheets/sheet${index + 1}.xml`, text: sheetXml(sheet) }));
+
+  return zipBlob(files, XLSX_MIME);
+}
+
+function safeFileName(value) {
+  return String(value).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'report';
+}
+
+function downloadWorkbook(filename, sheets) {
+  const url = URL.createObjectURL(workbookBlob(sheets));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Downloaded: ' + filename, 'success');
+}
+
+// ── Workbook contents ──
+const ENTRY_HEADER = ['Rent', 'Unit Start', 'Unit Final', 'Units', 'Rate', 'Electricity', 'Previous Balance',
+  'Total Due', 'Paid', 'Pay Date', 'Mode', 'Closing Balance', 'Status', 'Remarks'];
+const ENTRY_WIDTHS = [10, 11, 11, 8, 7, 12, 15, 12, 11, 13, 15, 15, 12, 34];
+
+function entryStatus(entry) {
+  if (!entry) return 'Not entered';
+  return entry.outstanding > 0 ? 'Due' : entry.outstanding < 0 ? 'Credit' : 'Paid';
+}
+
+// The 14 columns shared by every sheet, so a room reads the same everywhere.
+function entryCells(entry) {
+  if (!entry) {
+    const blanks = ENTRY_HEADER.map(() => xText(''));
+    blanks[ENTRY_HEADER.indexOf('Status')] = xText('Not entered');
+    return blanks;
+  }
+  return [
+    xNum(entry.rent), xNum(entry.unitStart, XS.cell), xNum(entry.unitFinal, XS.cell),
+    xNum(entry.consumed, XS.cell), xNum(entry.rate, XS.cell), xNum(entry.elecBill),
+    xNum(entry.lastOutstanding), xNum(entry.totalDue), xNum(entry.paid),
+    xDate(entry.payDate), xText(entry.payMode || ''), xNum(entry.outstanding),
+    xText(entryStatus(entry)), xText(entry.remarks || '')
+  ];
+}
+
+function headerCells(labels) {
+  return labels.map(label => xText(label, XS.head));
+}
+
+// A padded row of "total" styling, with money dropped into named columns.
+function totalRow(leadingLabels, amounts) {
+  const cells = leadingLabels.map((label, index) => xText(index === 0 ? label : '', XS.totalText));
+  ENTRY_HEADER.forEach(column => {
+    cells.push(Object.prototype.hasOwnProperty.call(amounts, column)
+      ? xNum(amounts[column], XS.totalMoney)
+      : xText('', XS.totalText));
+  });
+  return cells;
+}
+
+function buildMonthWorkbook(month) {
+  const rows = getMonthReportRows(month);
+  const totals = monthReportTotals(rows);
+  const sheetRows = [
+    [xText(PROPERTY_NAME + ' — Monthly Rent & Electricity Report', XS.title)],
+    [xText('Month', XS.label), xText(fmtMonth(month), XS.plain)],
+    [xText('Generated', XS.label), xText(new Date().toLocaleString('en-IN'), XS.plain)],
+    [],
+    headerCells(['Room', 'Tenant'].concat(ENTRY_HEADER))
+  ];
+
+  rows.forEach(({ tenant, entry }) => {
+    sheetRows.push([xText(tenant.flat), xText(entry && entry.tenantName ? entry.tenantName : tenant.name)]
+      .concat(entryCells(entry)));
+  });
+
+  sheetRows.push(totalRow(['Total', ''], {
+    'Rent': totals.rent,
+    'Electricity': totals.elec,
+    'Total Due': totals.totalDue,
+    'Paid': totals.paid,
+    'Closing Balance': totals.dues - totals.credits
+  }));
+  sheetRows.push([]);
+  sheetRows.push([xText('Outstanding', XS.label), xNum(totals.dues, XS.money)]);
+  sheetRows.push([xText('Tenant credits', XS.label), xNum(totals.credits, XS.money)]);
+  sheetRows.push([xText('Entries added', XS.label), xText(totals.entered + ' of ' + rows.length, XS.plain)]);
+
+  return [{
+    name: fmtMonth(month),
+    freeze: 5,
+    cols: [10, 22].concat(ENTRY_WIDTHS),
+    rows: sheetRows
+  }];
+}
+
+function tenantSheet(tenantIndex, sheetName) {
+  const tenant = DB.tenants[tenantIndex];
+  const entries = [...(tenant.entries || [])].sort(compareEntries);
+  const totals = tenantStatementTotals(tenant);
+  const rows = [
+    [xText(PROPERTY_NAME + ' — Tenant Payment Record', XS.title)],
+    [xText('Room', XS.label), xText(tenant.flat, XS.plain)],
+    [xText('Tenant', XS.label), xText(tenant.name, XS.plain)],
+    [xText('Mobile', XS.label), xText(tenant.mobile || '', XS.plain)],
+    [xText('Monthly rent', XS.label), xNum(tenant.rent, XS.money)],
+    [xText('Security deposit', XS.label), xNum(tenant.security || 0, XS.money)],
+    [xText('Tenant since', XS.label), xText(tenant.startDate ? fmtDate(tenant.startDate) : '', XS.plain)],
+    [xText('Generated', XS.label), xText(new Date().toLocaleString('en-IN'), XS.plain)],
+    [],
+    headerCells(['Month'].concat(ENTRY_HEADER))
+  ];
+
+  entries.forEach(entry => rows.push([xText(fmtMonth(entry.month))].concat(entryCells(entry))));
+
+  rows.push(totalRow(['Total'], {
+    'Rent': totals.rent,
+    'Electricity': totals.elec,
+    'Total Due': totals.billed,
+    'Paid': totals.paid,
+    'Closing Balance': totals.closing
+  }));
+  rows.push([]);
+  rows.push([xText('Balance as on ' + fmtDate(toDateInput(new Date())), XS.label), xNum(totals.closing, XS.money)]);
+  rows.push([xText('Positive = due from tenant · negative = paid in advance', XS.plain)]);
+
+  return { name: sheetName, freeze: 10, cols: [12].concat(ENTRY_WIDTHS), rows };
+}
+
+function buildTenantWorkbook(tenantIndex) {
+  return [tenantSheet(tenantIndex, 'Room ' + DB.tenants[tenantIndex].flat)];
+}
+
+// One "All Entries" sheet plus a tab per room — the same shape as the original
+// workbook, so Dad can still flip to a single room's sheet.
+function buildLedgerWorkbook() {
+  const allRows = [
+    [xText(PROPERTY_NAME + ' — Complete Rent Record (all rooms, all months)', XS.title)],
+    [xText('Generated', XS.label), xText(new Date().toLocaleString('en-IN'), XS.plain)],
+    [],
+    headerCells(['Room', 'Tenant', 'Month'].concat(ENTRY_HEADER))
+  ];
+
+  const roomSheets = [];
+  DB.tenants
+    .map((tenant, tenantIndex) => ({ tenant, tenantIndex }))
+    .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat))
+    .forEach(({ tenant, tenantIndex }) => {
+      const entries = [...(tenant.entries || [])].sort(compareEntries);
+      if (!entries.length) return;
+      entries.forEach(entry => {
+        allRows.push([xText(tenant.flat), xText(entry.tenantName || tenant.name), xText(fmtMonth(entry.month))]
+          .concat(entryCells(entry)));
+      });
+      roomSheets.push(tenantSheet(tenantIndex, 'Room ' + tenant.flat));
+    });
+
+  return [{
+    name: 'All Entries',
+    freeze: 4,
+    cols: [10, 22, 12].concat(ENTRY_WIDTHS),
+    rows: allRows
+  }].concat(roomSheets);
+}
+
+// ── Report screen wiring ──
+function printDoc(html) {
+  const area = document.getElementById('printArea');
+  area.innerHTML = html;
+  window.print();
+}
+
+function reportFlatOptions(selected = '') {
+  return DB.tenants
+    .map((tenant, tenantIndex) => ({ tenant, tenantIndex }))
+    .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat))
+    .map(({ tenant, tenantIndex }) => {
+      const label = `${tenant.flat} — ${tenant.name}${tenant.checkedOut ? ' (checked out)' : ''}`;
+      return `<option value="${tenantIndex}" ${String(tenantIndex) === String(selected) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+// Open on the room Dad was just looking at; otherwise the first room that has
+// entries, so the preview is never a blank record.
+function defaultReportFlat() {
+  if (currentTenantIdx != null && DB.tenants[currentTenantIdx]) return String(currentTenantIdx);
+  const withEntries = DB.tenants.findIndex(tenant => !tenant.checkedOut && (tenant.entries || []).length);
+  return withEntries >= 0 ? String(withEntries) : '0';
+}
+
+function onReportTypeChange() {
+  const type = document.getElementById('reportType').value;
+  document.getElementById('reportMonthWrap').style.display = type === 'month' ? '' : 'none';
+  document.getElementById('reportFlatWrap').style.display = type === 'tenant' ? '' : 'none';
+  const shareable = type === 'tenant';
+  document.getElementById('reportShareBtn').style.display = shareable ? '' : 'none';
+  document.getElementById('reportCopyBtn').style.display = shareable ? '' : 'none';
+  renderReport();
+}
+
+function renderReport() {
+  const typeSelect = document.getElementById('reportType');
+  if (!typeSelect) return;
+  const type = typeSelect.value;
+  const monthInput = document.getElementById('reportMonth');
+  const flatSelect = document.getElementById('reportFlat');
+
+  if (!monthInput.value) monthInput.value = currentMonthString();
+  // Rebuilt every render so added, renamed or deleted rooms stay in step.
+  flatSelect.innerHTML = reportFlatOptions(flatSelect.value !== '' ? flatSelect.value : defaultReportFlat());
+
+  const hint = document.getElementById('reportHint');
+  let html = '';
+  if (type === 'month') {
+    html = buildMonthReportDoc(monthInput.value);
+    hint.textContent = 'One page per month, covering every room — the sheet to keep for your own records.';
+  } else if (type === 'tenant') {
+    html = buildTenantStatementDoc(Number(flatSelect.value));
+    hint.textContent = 'The full payment history of one room, with a signature line — this is the copy to hand or send to the tenant.';
+  } else {
+    html = buildLedgerDoc();
+    hint.textContent = 'Every entry of every room. The Excel file has an “All Entries” sheet plus one tab per room, like the old workbook; printing it can run to several pages.';
+  }
+  document.getElementById('reportPreview').innerHTML = html;
+}
+
+function printCurrentReport() {
+  renderReport();
+  printDoc(document.getElementById('reportPreview').innerHTML);
+}
+
+function downloadCurrentReport() {
+  const type = document.getElementById('reportType').value;
+  if (type === 'month') {
+    const month = document.getElementById('reportMonth').value || currentMonthString();
+    downloadWorkbook(`Jasmine_AllRooms_${safeFileName(fmtMonth(month))}.xlsx`, buildMonthWorkbook(month));
+  } else if (type === 'tenant') {
+    const tenantIndex = Number(document.getElementById('reportFlat').value);
+    if (!DB.tenants[tenantIndex]) return;
+    downloadTenantWorkbook(tenantIndex);
+  } else {
+    downloadWorkbook(`Jasmine_FullRecord_${toDateInput(new Date())}.xlsx`, buildLedgerWorkbook());
+  }
+}
+
+function shareCurrentReport() {
+  const tenantIndex = Number(document.getElementById('reportFlat').value);
+  const tenant = DB.tenants[tenantIndex];
+  if (!tenant) return;
+  const message = buildTenantStatementText(tenantIndex);
+  const mobile = String(tenant.mobile || '').replace(/\D/g, '');
+  if (mobile.length < 10) {
+    copyCurrentReport();
+    toast('No mobile number saved for this room — the record was copied instead.', 'error');
+    return;
+  }
+  const number = mobile.length === 10 ? '91' + mobile : mobile;
+  window.open('https://wa.me/' + number + '?text=' + encodeURIComponent(message), '_blank');
+}
+
+function copyCurrentReport() {
+  const tenantIndex = Number(document.getElementById('reportFlat').value);
+  const message = buildTenantStatementText(tenantIndex);
+  if (!message) return;
+  navigator.clipboard.writeText(message)
+    .then(() => toast('Payment record copied — paste it anywhere.', 'success'))
+    .catch(() => {
+      const area = document.createElement('textarea');
+      area.value = message;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      document.body.removeChild(area);
+      toast('Payment record copied!', 'success');
+    });
+}
+
+function downloadTenantWorkbook(tenantIndex) {
+  const tenant = DB.tenants[tenantIndex];
+  if (!tenant) return;
+  downloadWorkbook(
+    `Jasmine_${safeFileName(tenant.flat)}_${safeFileName(tenant.name)}_Record.xlsx`,
+    buildTenantWorkbook(tenantIndex)
+  );
+}
+
+// Shortcuts from the Summary screen and a tenant's History tab.
+function printMonthFromSummary() {
+  const month = document.getElementById('summaryMonth').value || currentMonthString();
+  printDoc(buildMonthReportDoc(month));
+}
+
+function downloadMonthFromSummary() {
+  const month = document.getElementById('summaryMonth').value || currentMonthString();
+  downloadWorkbook(`Jasmine_AllRooms_${safeFileName(fmtMonth(month))}.xlsx`, buildMonthWorkbook(month));
+}
+
+function printStatementForCurrentTenant() {
+  if (currentTenantIdx == null) return;
+  printDoc(buildTenantStatementDoc(currentTenantIdx));
+}
+
+function downloadStatementForCurrentTenant() {
+  if (currentTenantIdx == null) return;
+  downloadTenantWorkbook(currentTenantIdx);
 }
 
 // ─────────────────────────────────────────────
