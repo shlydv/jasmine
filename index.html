@@ -445,7 +445,9 @@
   .rep-fact strong { font-size: 15px; }
   .rep-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .rep-table th, .rep-table td { border: 1px solid #bbb; padding: 5px 6px; text-align: right; }
-  .rep-table th { background: #eef3fa; font-weight: 700; }
+  /* The global `th` rule paints header text white for the app's blue tables;
+     report tables sit on a pale header, so the colour must be set back. */
+  .rep-table th { background: #eef3fa; color: #14304f; font-weight: 700; }
   .rep-table .tl { text-align: left; }
   .rep-table tfoot td { font-weight: 700; background: #f4f6f9; }
   .rep-note { font-size: 12px; color: var(--gray); margin-top: 10px; line-height: 1.6; }
@@ -454,6 +456,20 @@
   .rep-foot { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 11px; color: var(--gray); text-align: center; }
   .rep-due { color: var(--red); font-weight: 700; }
   .rep-credit { color: var(--blue); font-weight: 700; }
+
+  /* ── YEAR AT A GLANCE ── */
+  .yr-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+  .yr-table th, .yr-table td { border:1px solid #bbb; padding:4px 5px; text-align:center; white-space:nowrap; }
+  .yr-table thead th { background:#eef3fa; color:#14304f; font-weight:700; }
+  .yr-table .yr-room { text-align:left; font-weight:700; background:#f8fafc; position:sticky; left:0; }
+  .yr-table .yr-name { text-align:left; color:var(--gray); font-weight:400; max-width:130px; overflow:hidden; text-overflow:ellipsis; }
+  .yr-table tfoot td { font-weight:700; background:#f4f6f9; }
+  .yr-clear { background:#dcfce7; color:#166534; font-weight:700; }
+  .yr-due { background:#fee2e2; color:#991b1b; font-weight:700; }
+  .yr-credit { background:#dbeafe; color:#1e40af; font-weight:700; }
+  .yr-none { background:#f6f7f9; color:#adb3bb; }
+  .yr-legend { display:flex; flex-wrap:wrap; gap:14px; margin:12px 0; font-size:12px; color:var(--gray); align-items:center; }
+  .yr-key { display:inline-block; width:14px; height:14px; border-radius:3px; border:1px solid #bbb; vertical-align:-2px; margin-right:5px; }
 
   #printArea { display: none; }
   @media print {
@@ -467,6 +483,12 @@
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; }
     @page { margin: 12mm; }
+    /* The year grid is 12 months wide, so it gets its own landscape page. */
+    .rep-landscape { page: wide; }
+    @page wide { size: landscape; margin: 10mm; }
+    .yr-table { font-size: 8.5px; }
+    .yr-table th, .yr-table td { padding: 2px 3px; }
+    .yr-table .yr-room { position: static; }
   }
 
   @media (max-width: 500px) {
@@ -617,11 +639,15 @@
           <option value="month">All rooms — one month</option>
           <option value="tenant">One room — full payment record</option>
           <option value="receipt">Rent receipt — one room, one month</option>
+          <option value="year">Year at a glance — all rooms, all months</option>
           <option value="ledger">All rooms — full record (every month)</option>
         </select>
       </label>
       <label id="reportMonthWrap">Month
         <input type="month" id="reportMonth" onchange="renderReport()">
+      </label>
+      <label id="reportYearWrap" style="display:none;">Year
+        <select id="reportYear" onchange="renderReport()"></select>
       </label>
       <label id="reportFlatWrap" style="display:none;">Room
         <select id="reportFlat" onchange="renderReport()"></select>
@@ -2994,6 +3020,177 @@ function buildLedgerDoc() {
     ${reportFoot()}`;
 }
 
+// ── Year at a glance ──
+// Dad's workbook runs April to March, so the grid follows the same year rather
+// than a calendar one. A financial year is named by the April it starts in.
+
+function financialYearOf(month) {
+  const parts = /^(\d{4})-(\d{2})/.exec(String(month || ''));
+  if (!parts) return null;
+  return Number(parts[2]) >= 4 ? Number(parts[1]) : Number(parts[1]) - 1;
+}
+
+function financialYearMonths(startYear) {
+  const months = [];
+  for (let offset = 0; offset < 12; offset++) {
+    const monthNumber = 4 + offset;
+    const year = startYear + Math.floor((monthNumber - 1) / 12);
+    const inYear = ((monthNumber - 1) % 12) + 1;
+    months.push(`${year}-${String(inYear).padStart(2, '0')}`);
+  }
+  return months;
+}
+
+function financialYearLabel(startYear) {
+  return `Apr ${startYear} – Mar ${startYear + 1}`;
+}
+
+function availableFinancialYears() {
+  const years = new Set();
+  DB.tenants.forEach(tenant => (tenant.entries || []).forEach(entry => {
+    const year = financialYearOf(entry.month);
+    if (year != null) years.add(year);
+  }));
+  years.add(financialYearOf(currentMonthString()));
+  return [...years].sort((a, b) => b - a);
+}
+
+// Compact enough to fit 12 columns: a tick when settled, the amount when not.
+function yearCell(entry) {
+  if (!entry) return { className: 'yr-none', text: '–' };
+  const balance = Math.round(Number(entry.outstanding) || 0);
+  if (balance > 0) return { className: 'yr-due', text: fmt(balance) };
+  if (balance < 0) return { className: 'yr-credit', text: '+' + fmt(-balance) };
+  return { className: 'yr-clear', text: '✓' };
+}
+
+function buildYearDoc(startYear) {
+  const months = financialYearMonths(startYear);
+  const rooms = DB.tenants
+    .map((tenant, tenantIndex) => ({ tenant, tenantIndex }))
+    .filter(({ tenant }) => !tenant.checkedOut || (tenant.entries || []).some(entry => months.includes(entry.month)))
+    .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat));
+
+  const monthPaid = months.map(() => 0);
+  const monthBilled = months.map(() => 0);
+  let grandPaid = 0;
+
+  const body = rooms.map(({ tenant }) => {
+    let roomPaid = 0;
+    const cells = months.map((month, index) => {
+      const entry = getMonthEntry(tenant, month);
+      if (entry) {
+        const paid = Number(entry.paid) || 0;
+        roomPaid += paid;
+        monthPaid[index] += paid;
+        monthBilled[index] += (Number(entry.rent) || 0) + (Number(entry.elecBill) || 0);
+      }
+      const cell = yearCell(entry);
+      return `<td class="${cell.className}">${cell.text}</td>`;
+    }).join('');
+    grandPaid += roomPaid;
+    return `<tr>
+      <td class="yr-room">${escapeHtml(tenant.flat)}</td>
+      <td class="yr-name">${escapeHtml(tenant.name)}</td>
+      ${cells}
+      <td><strong>${fmt(Math.round(roomPaid))}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const closingDues = rooms.reduce((sum, { tenant }) => {
+    // The balance standing at the end of the year, or at its last entry.
+    for (let i = months.length - 1; i >= 0; i--) {
+      const entry = getMonthEntry(tenant, months[i]);
+      if (entry) return sum + Math.max(0, Number(entry.outstanding) || 0);
+    }
+    return sum;
+  }, 0);
+
+  return `<div class="rep-landscape">
+    ${reportHead('Year at a Glance', financialYearLabel(startYear))}
+    <div class="yr-legend">
+      <span><span class="yr-key" style="background:#dcfce7;"></span>Settled</span>
+      <span><span class="yr-key" style="background:#fee2e2;"></span>Amount still due</span>
+      <span><span class="yr-key" style="background:#dbeafe;"></span>Paid in advance (+)</span>
+      <span><span class="yr-key" style="background:#f6f7f9;"></span>No entry</span>
+      <span style="margin-left:auto;">Collected this year: <strong>${money(grandPaid)}</strong> · Still due: <strong>${money(closingDues)}</strong></span>
+    </div>
+    <div class="table-wrap">
+      <table class="yr-table">
+        <thead><tr>
+          <th class="yr-room">Room</th><th class="yr-name">Tenant</th>
+          ${months.map(month => `<th>${fmtMonth(month).replace(' ', '<br>')}</th>`).join('')}
+          <th>Paid<br>in year</th>
+        </tr></thead>
+        <tbody>${body || `<tr><td colspan="${months.length + 3}" style="padding:18px;">No rooms to show.</td></tr>`}</tbody>
+        <tfoot>
+          <tr>
+            <td class="yr-room">Billed</td><td class="yr-name"></td>
+            ${monthBilled.map(value => `<td>${value ? fmt(Math.round(value)) : '–'}</td>`).join('')}
+            <td><strong>${fmt(Math.round(monthBilled.reduce((sum, value) => sum + value, 0)))}</strong></td>
+          </tr>
+          <tr>
+            <td class="yr-room">Collected</td><td class="yr-name"></td>
+            ${monthPaid.map(value => `<td>${value ? fmt(Math.round(value)) : '–'}</td>`).join('')}
+            <td><strong>${fmt(Math.round(grandPaid))}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="rep-note">Each cell is that month's closing balance: a tick means nothing was pending, a red figure is what the room still owed, and a + figure is money paid in advance. Prints best on landscape paper.</div>
+    ${reportFoot()}
+  </div>`;
+}
+
+function buildYearWorkbook(startYear) {
+  const months = financialYearMonths(startYear);
+  const rooms = DB.tenants
+    .map((tenant, tenantIndex) => ({ tenant, tenantIndex }))
+    .filter(({ tenant }) => !tenant.checkedOut || (tenant.entries || []).some(entry => months.includes(entry.month)))
+    .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat));
+
+  // Two views of the same year: what each room still owed, and what it paid.
+  const sheet = (title, valueOf) => {
+    const rows = [
+      [xText(`${PROPERTY_NAME} — ${title}`, XS.title)],
+      [xText('Year', XS.label), xText(financialYearLabel(startYear), XS.plain)],
+      [xText('Generated', XS.label), xText(new Date().toLocaleString('en-IN'), XS.plain)],
+      [],
+      headerCells(['Room', 'Tenant'].concat(months.map(fmtMonth)).concat(['Total']))
+    ];
+    const totals = months.map(() => 0);
+    let grand = 0;
+    rooms.forEach(({ tenant }) => {
+      let rowTotal = 0;
+      const cells = months.map((month, index) => {
+        const entry = getMonthEntry(tenant, month);
+        if (!entry) return xText('');
+        const value = valueOf(entry);
+        totals[index] += value;
+        rowTotal += value;
+        return xNum(value);
+      });
+      grand += rowTotal;
+      rows.push([xText(tenant.flat), xText(tenant.name)].concat(cells).concat([xNum(rowTotal, XS.totalMoney)]));
+    });
+    rows.push([xText('Total', XS.totalText), xText('', XS.totalText)]
+      .concat(totals.map(value => xNum(value, XS.totalMoney)))
+      .concat([xNum(grand, XS.totalMoney)]));
+    return {
+      name: title,
+      freeze: 5,
+      cols: [10, 22].concat(months.map(() => 12)).concat([13]),
+      rows
+    };
+  };
+
+  return [
+    sheet('Closing balance', entry => Number(entry.outstanding) || 0),
+    sheet('Paid', entry => Number(entry.paid) || 0),
+    sheet('Billed', entry => (Number(entry.rent) || 0) + (Number(entry.elecBill) || 0))
+  ];
+}
+
 // ── WhatsApp / plain-text version of a tenant's record ──
 function buildTenantStatementText(tenantIndex) {
   const tenant = DB.tenants[tenantIndex];
@@ -3422,6 +3619,7 @@ function onReportTypeChange() {
   // A receipt needs both pickers: which room, and which month's payment.
   document.getElementById('reportMonthWrap').style.display = (type === 'month' || type === 'receipt') ? '' : 'none';
   document.getElementById('reportFlatWrap').style.display = (type === 'tenant' || type === 'receipt') ? '' : 'none';
+  document.getElementById('reportYearWrap').style.display = type === 'year' ? '' : 'none';
   const shareable = type === 'tenant' || type === 'receipt';
   document.getElementById('reportShareBtn').style.display = shareable ? '' : 'none';
   document.getElementById('reportCopyBtn').style.display = shareable ? '' : 'none';
@@ -3441,6 +3639,13 @@ function renderReport() {
   // Rebuilt every render so added, renamed or deleted rooms stay in step.
   flatSelect.innerHTML = reportFlatOptions(flatSelect.value !== '' ? flatSelect.value : defaultReportFlat());
 
+  const yearSelect = document.getElementById('reportYear');
+  const years = availableFinancialYears();
+  const chosenYear = yearSelect.value !== '' ? yearSelect.value : String(years[0]);
+  yearSelect.innerHTML = years
+    .map(year => `<option value="${year}" ${String(year) === chosenYear ? 'selected' : ''}>${financialYearLabel(year)}</option>`)
+    .join('');
+
   const hint = document.getElementById('reportHint');
   let html = '';
   if (type === 'month') {
@@ -3452,6 +3657,9 @@ function renderReport() {
   } else if (type === 'receipt') {
     html = buildReceiptDoc(Number(flatSelect.value), monthInput.value);
     hint.textContent = 'A receipt for one month’s payment. Print it, or send it on WhatsApp straight to the tenant.';
+  } else if (type === 'year') {
+    html = buildYearDoc(Number(yearSelect.value));
+    hint.textContent = 'Every room across the whole year, one row each — the view the old workbook gave you. Choose landscape when printing.';
   } else {
     html = buildLedgerDoc();
     hint.textContent = 'Every entry of every room. The Excel file has an “All Entries” sheet plus one tab per room, like the old workbook; printing it can run to several pages.';
@@ -3475,6 +3683,9 @@ function downloadCurrentReport() {
     downloadTenantWorkbook(tenantIndex);
   } else if (type === 'receipt') {
     toast('A receipt is meant to be printed or sent, not opened in Excel.', 'error');
+  } else if (type === 'year') {
+    const year = Number(document.getElementById('reportYear').value);
+    downloadWorkbook(`Jasmine_Year_${year}-${String(year + 1).slice(2)}.xlsx`, buildYearWorkbook(year));
   } else {
     downloadWorkbook(`Jasmine_FullRecord_${toDateInput(new Date())}.xlsx`, buildLedgerWorkbook());
   }
