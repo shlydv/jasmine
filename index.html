@@ -394,6 +394,39 @@
     font-size: 15px;
   }
 
+  /* ── MONTH ENTRY (batch billing) ── */
+  .me-bar { display:flex; flex-wrap:wrap; gap:14px; align-items:end; margin:18px 0 4px; font-size:13px; font-weight:700; color:var(--gray); }
+  .me-bar select, .me-bar input { display:block; margin-top:4px; padding:9px 12px; border:2px solid var(--border); border-radius:8px; font-size:15px; background:white; font-weight:600; color:#222; }
+  .me-progress { background:var(--white); border-radius:10px; box-shadow:var(--shadow); padding:14px 16px; margin-top:16px; display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; }
+  .me-progress-text { font-size:15px; font-weight:700; }
+  .me-progress-sub { font-size:13px; color:var(--gray); margin-top:2px; }
+  .me-toggle { display:flex; gap:0; border:2px solid var(--border); border-radius:8px; overflow:hidden; }
+  .me-toggle button { border:none; background:var(--white); padding:8px 14px; font-size:14px; font-weight:700; color:var(--gray); cursor:pointer; }
+  .me-toggle button.active { background:var(--blue); color:white; }
+
+  .me-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:14px; margin-top:16px; }
+  .me-card { background:var(--white); border-radius:10px; box-shadow:var(--shadow); padding:14px; border:2px solid transparent; }
+  .me-card.filled { border-color:#bfe3cd; }
+  .me-card.warn { border-color:var(--orange); background:#fffaf3; }
+  .me-card.error { border-color:var(--red); background:var(--red-light); }
+  .me-card.done { opacity:0.72; background:#f7faf8; }
+  .me-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .me-flat { font-size:19px; font-weight:700; color:var(--blue); }
+  .me-name { font-size:13px; color:var(--gray); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .me-prev { font-size:12px; color:var(--gray); margin-top:4px; }
+  .me-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+  .me-fields label { font-size:11px; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:0.3px; }
+  .me-fields input, .me-fields select { width:100%; margin-top:3px; padding:9px 10px; border:2px solid var(--border); border-radius:8px; font-size:16px; font-weight:600; }
+  .me-fields input:focus, .me-fields select:focus { outline:none; border-color:var(--blue); }
+  .me-calc { margin-top:10px; font-size:13px; color:var(--gray); line-height:1.6; border-top:1px dashed var(--border); padding-top:8px; }
+  .me-calc strong { color:#222; }
+  .me-flag { margin-top:8px; font-size:12.5px; font-weight:600; line-height:1.5; padding:8px 10px; border-radius:8px; }
+  .me-flag.warn { background:var(--orange-light); color:#8a4b00; }
+  .me-flag.error { background:#fde2df; color:#8c1d13; }
+  .me-done-note { margin-top:10px; font-size:13px; color:var(--green); font-weight:700; }
+  /* Opaque, so cards scroll cleanly underneath rather than showing through. */
+  .me-save { position:sticky; bottom:0; margin-top:18px; padding:14px 0 16px; background:var(--bg); border-top:2px solid var(--border); box-shadow:0 -6px 12px rgba(244,246,249,0.95); display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+
   /* ── REPORTS & PRINTING ── */
   .rep-intro { color: var(--gray); font-size: 14px; margin: 6px 0 16px; line-height: 1.6; }
   .rep-picker { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; font-size: 13px; font-weight: 700; color: var(--gray); }
@@ -469,6 +502,7 @@
 
 <nav>
   <button class="nav-btn active" onclick="showScreen('home')">🏠 All Flats</button>
+  <button class="nav-btn" onclick="showScreen('monthEntry')">📝 Month Entry</button>
   <button class="nav-btn" onclick="showScreen('summary')">📊 Summary</button>
   <button class="nav-btn" onclick="showScreen('reports')">📄 Reports</button>
   <button class="nav-btn" onclick="showScreen('addTenant')">➕ Add Tenant</button>
@@ -487,6 +521,45 @@
       oninput="renderHome()">
   </div>
   <div class="home-grid" id="homeGrid"></div>
+</div>
+
+<!-- MONTH ENTRY SCREEN -->
+<div id="screen-monthEntry" class="screen">
+  <div class="me-bar">
+    <div style="flex:1 1 auto;">
+      <div class="section-title" style="margin:0;">📝 Month Entry</div>
+      <div style="font-size:13px;color:var(--gray);margin-top:4px;font-weight:400;">
+        Enter every room's meter reading and payment on one screen. Everything else is worked out for you.
+      </div>
+    </div>
+    <label>Month
+      <input type="month" id="me_month" onchange="renderMonthEntry()">
+    </label>
+    <label>Payment date for new rows
+      <input type="date" id="me_defaultDate" onchange="applyMonthEntryDefaults()">
+    </label>
+    <label>Payment mode
+      <select id="me_defaultMode" onchange="applyMonthEntryDefaults()"></select>
+    </label>
+  </div>
+
+  <div class="me-progress">
+    <div>
+      <div class="me-progress-text" id="me_progressText">—</div>
+      <div class="me-progress-sub" id="me_progressSub"></div>
+    </div>
+    <div class="me-toggle">
+      <button type="button" id="me_showPending" class="active" onclick="setMonthEntryFilter('pending')">Still to enter</button>
+      <button type="button" id="me_showAll" onclick="setMonthEntryFilter('all')">All rooms</button>
+    </div>
+  </div>
+
+  <div class="me-list" id="me_list"></div>
+
+  <div class="me-save">
+    <button class="btn btn-success" style="font-size:17px; padding:14px 26px;" onclick="saveMonthEntries()">💾 Save all entered rooms</button>
+    <div style="font-size:13px;color:var(--gray);" id="me_saveHint"></div>
+  </div>
 </div>
 
 <!-- SUMMARY SCREEN -->
@@ -543,6 +616,7 @@
         <select id="reportType" onchange="onReportTypeChange()">
           <option value="month">All rooms — one month</option>
           <option value="tenant">One room — full payment record</option>
+          <option value="receipt">Rent receipt — one room, one month</option>
           <option value="ledger">All rooms — full record (every month)</option>
         </select>
       </label>
@@ -555,7 +629,7 @@
     </div>
     <div class="rep-actions">
       <button class="btn btn-primary" type="button" onclick="printCurrentReport()">🖨 Print / Save as PDF</button>
-      <button class="btn btn-success" type="button" onclick="downloadCurrentReport()">⬇ Download Excel file</button>
+      <button class="btn btn-success" type="button" id="reportExcelBtn" onclick="downloadCurrentReport()">⬇ Download Excel file</button>
       <button class="btn btn-whatsapp" type="button" id="reportShareBtn" style="display:none; font-size:15px;" onclick="shareCurrentReport()">📲 Send on WhatsApp</button>
       <button class="btn btn-copy btn-sm" type="button" id="reportCopyBtn" style="display:none;" onclick="copyCurrentReport()">📋 Copy text</button>
     </div>
@@ -752,6 +826,7 @@
         <div class="form-group">
           <label>Final Units (current reading)</label>
           <input type="number" id="b_unitFinal" placeholder="Enter meter reading now">
+          <div id="b_readingWarning" class="me-flag warn" style="display:none;"></div>
         </div>
         <div class="form-group">
           <label>Units Consumed</label>
@@ -1278,9 +1353,10 @@ function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const map = { home: 0, summary: 1, reports: 2, addTenant: 3, backup: 4 };
+  const map = { home: 0, monthEntry: 1, summary: 2, reports: 3, addTenant: 4, backup: 5 };
   if (map[name] !== undefined) document.querySelectorAll('.nav-btn')[map[name]].classList.add('active');
   if (name === 'home') renderHome();
+  if (name === 'monthEntry') renderMonthEntry();
   if (name === 'summary') renderSummary();
   if (name === 'reports') renderReport();
   if (name === 'backup') renderBackupInfo();
@@ -1480,6 +1556,11 @@ function calcBilling() {
   document.getElementById('b_elecBill').value = elecBill || '';
   document.getElementById('b_totalDue').value = totalDue;
   document.getElementById('b_remaining').value = remaining;
+
+  const warning = getReadingWarning(t, unitStart, unitFinal, rate);
+  const warningBox = document.getElementById('b_readingWarning');
+  warningBox.style.display = warning ? 'block' : 'none';
+  warningBox.textContent = warning ? '⚠️ ' + warning : '';
 }
 
 function saveBillingEntry() {
@@ -1502,6 +1583,9 @@ function saveBillingEntry() {
   }
   if (!unitFinal && unitFinal !== 0) { toast('Please enter the final meter reading', 'error'); return; }
   if (unitFinal < unitStart) { toast('Final meter reading cannot be less than start reading', 'error'); return; }
+
+  const readingWarning = getReadingWarning(t, unitStart, unitFinal, rate);
+  if (readingWarning && !confirm(readingWarning + '\n\nSave this entry anyway?')) return;
 
   const consumed = unitFinal - unitStart;
   const elecBill = consumed * rate;
@@ -1613,7 +1697,12 @@ function updateEditMeterBill(updateAmount = true) {
   const rate = Number(document.getElementById('e_rate').value);
   const valid = Number.isFinite(start) && Number.isFinite(end) && Number.isFinite(rate) && end >= start && rate >= 0;
   const calculated = valid ? roundMoney((end - start) * rate) : null;
-  document.getElementById('e_meterHint').textContent = calculated == null ? 'Check the meter readings.' : 'Meter calculation: ₹' + fmt(calculated) + '. You may override the bill if needed.';
+  const tenant = DB.tenants[currentTenantIdx];
+  const warning = valid ? getReadingWarning(tenant, start, end, rate) : null;
+  document.getElementById('e_meterHint').textContent = calculated == null
+    ? 'Check the meter readings.'
+    : (warning ? '⚠️ ' + warning : 'Meter calculation: ₹' + fmt(calculated) + '. You may override the bill if needed.');
+  document.getElementById('e_meterHint').style.color = warning ? '#8a4b00' : '';
   if (updateAmount && calculated != null) document.getElementById('e_elecBill').value = calculated;
 }
 
@@ -1836,6 +1925,13 @@ function renderSendBill() {
   container.innerHTML = `
     <div class="form-row" style="margin-bottom:16px;">
       <div class="form-group">
+        <label>What do you want to send?</label>
+        <select id="wa_messageType" onchange="updateWaPreview()" style="font-size:16px;">
+          <option value="bill">🧾 Bill — what is due this month</option>
+          <option value="receipt">✅ Receipt — money already received</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Select Month to Send</label>
         <select id="wa_entrySelect" onchange="updateWaPreview()" style="font-size:16px;">
           ${entryOptions}
@@ -1858,6 +1954,96 @@ function renderSendBill() {
     </div>
   `;
   updateWaPreview();
+}
+
+// ── Receipts ──
+// A receipt confirms money already received, so it only exists once something
+// has actually been paid for that month.
+function receiptNumber(tenant, entry) {
+  return `JR/${tenant.flat}/${fmtMonth(entry.month).replace(' ', '-')}`;
+}
+
+function receiptElectricityLine(entry) {
+  const detail = entry.unitStart != null && entry.unitFinal != null
+    ? ` (${fmt(entry.consumed)} units × ₹${entry.rate})`
+    : '';
+  return `Electricity${detail}: ₹${fmt(entry.elecBill)}`;
+}
+
+function buildReceiptMessage(t, entry) {
+  const paid = Number(entry.paid) || 0;
+  if (paid <= 0) return null;
+  const balance = Number(entry.outstanding) || 0;
+  const balanceLine = balance > 0
+    ? `Balance still due: ₹${fmt(balance)}`
+    : balance < 0 ? `Advance in your favour: ₹${fmt(-balance)}` : 'Balance: Clear — nothing pending';
+  // Spelled out rather than signed: this sheet goes to the tenant.
+  const previous = Number(entry.lastOutstanding) || 0;
+  const previousLine = previous > 0
+    ? `Add previous balance due: ₹${fmt(previous)}\n`
+    : previous < 0 ? `Less advance brought forward: ₹${fmt(-previous)}\n` : '';
+
+  return `*JASMINE RESIDENCY — RENT RECEIPT*
+Receipt No: ${receiptNumber(t, entry)}
+Date: ${fmtDate(toDateInput(new Date()))}
+
+Received with thanks from *${t.name}*
+Room No: ${t.flat}
+For the month of: ${fmtMonth(entry.month)}
+
+Rent: ₹${fmt(entry.rent)}
+${receiptElectricityLine(entry)}
+${previousLine}Total due: ₹${fmt(entry.totalDue)}
+
+*Amount received: ₹${fmt(paid)}*${entry.payDate ? `\nPaid on: ${fmtDate(entry.payDate)}` : ''}${entry.payMode ? `\nMode: ${entry.payMode}` : ''}
+
+${balanceLine}
+
+— Jasmine Residency`;
+}
+
+function buildReceiptDoc(tenantIndex, month) {
+  const tenant = DB.tenants[tenantIndex];
+  if (!tenant) return '<div class="empty-state">Select a room to make a receipt.</div>';
+  const entry = getMonthEntry(tenant, month);
+  if (!entry) {
+    return `${reportHead('Rent Receipt', `Room ${tenant.flat} · ${tenant.name}`)}
+      <div class="empty-state"><div class="es-icon">🧾</div>No entry has been added for ${escapeHtml(fmtMonth(month))} yet, so there is nothing to receipt.<br>Add the month first from Month Entry.</div>`;
+  }
+  const paid = Number(entry.paid) || 0;
+  if (paid <= 0) {
+    return `${reportHead('Rent Receipt', `Room ${tenant.flat} · ${tenant.name}`)}
+      <div class="empty-state"><div class="es-icon">🧾</div>No payment is recorded for ${escapeHtml(fmtMonth(month))}, so a receipt cannot be made.<br>A receipt confirms money already received.</div>`;
+  }
+
+  const balance = Number(entry.outstanding) || 0;
+  const row = (label, value) => `<tr><td class="tl">${label}</td><td>${value}</td></tr>`;
+
+  return `${reportHead('Rent Receipt', `Receipt No ${receiptNumber(tenant, entry)}`)}
+    <div class="rep-facts">
+      <div class="rep-fact"><span>Room</span><strong>${escapeHtml(tenant.flat)}</strong></div>
+      <div class="rep-fact"><span>Received from</span><strong>${escapeHtml(tenant.name)}</strong></div>
+      <div class="rep-fact"><span>For the month of</span><strong>${fmtMonth(entry.month)}</strong></div>
+      <div class="rep-fact"><span>Receipt date</span><strong>${fmtDate(toDateInput(new Date()))}</strong></div>
+    </div>
+    <table class="rep-table" style="max-width:520px;">
+      <tbody>
+        ${row('Rent', money(entry.rent))}
+        ${row('Electricity' + (entry.unitStart != null && entry.unitFinal != null
+          ? ` <small style="color:#666;">(${fmt(entry.consumed)} units × ₹${entry.rate})</small>` : ''), money(entry.elecBill))}
+        ${entry.lastOutstanding ? row(
+          Number(entry.lastOutstanding) < 0 ? 'Less advance brought forward' : 'Add previous balance due',
+          money(Math.abs(Number(entry.lastOutstanding)))) : ''}
+        ${row('<strong>Total due</strong>', '<strong>' + money(entry.totalDue) + '</strong>')}
+      </tbody>
+      <tfoot>
+        <tr><td class="tl">Amount received${entry.payDate ? ` on ${fmtDate(entry.payDate)}` : ''}${entry.payMode ? ` · ${escapeHtml(entry.payMode)}` : ''}</td><td>${money(paid)}</td></tr>
+        <tr><td class="tl">Balance</td><td>${balanceCell(balance)}</td></tr>
+      </tfoot>
+    </table>
+    <div class="rep-note">Received with thanks. Electricity is charged on the meter reading difference at the agreed rate per unit.</div>
+    <div class="rep-sign"><div>Tenant</div><div>For ${PROPERTY_NAME}</div></div>
+    ${reportFoot('Tenant copy')}`;
 }
 
 function buildBillMessage(t, entry) {
@@ -1883,20 +2069,33 @@ Rent=${entry.rent}
 ${balanceText}`;
 }
 
-function updateWaPreview() {
+// Bill and receipt share the same send flow; only the wording differs.
+function currentWaMessage() {
   const t = DB.tenants[currentTenantIdx];
   const idx = parseInt(document.getElementById('wa_entrySelect').value);
   const entry = t.entries[idx];
-  const msg = buildBillMessage(t, entry);
-  document.getElementById('wa_preview').textContent = msg;
+  if (!entry) return { text: null, problem: 'Select a month to send.' };
+  const type = document.getElementById('wa_messageType').value;
+  if (type === 'receipt') {
+    const receipt = buildReceiptMessage(t, entry);
+    return receipt
+      ? { text: receipt }
+      : { text: null, problem: `No payment is recorded for ${fmtMonth(entry.month)}, so there is nothing to receipt yet.\n\nA receipt confirms money you have already received. To ask for payment, choose “Bill” above.` };
+  }
+  return { text: buildBillMessage(t, entry) };
+}
+
+function updateWaPreview() {
+  const message = currentWaMessage();
+  document.getElementById('wa_preview').textContent = message.text || message.problem;
+  document.getElementById('wa_preview').style.opacity = message.text ? '1' : '0.75';
 }
 
 function openWhatsApp() {
-  const t = DB.tenants[currentTenantIdx];
   const mobile = document.getElementById('wa_mobile').value.trim().replace(/\D/g, '');
-  const idx = parseInt(document.getElementById('wa_entrySelect').value);
-  const entry = t.entries[idx];
-  const msg = buildBillMessage(t, entry);
+  const message = currentWaMessage();
+  const msg = message.text;
+  if (!msg) { toast(message.problem.split('\n')[0], 'error'); return; }
 
   if (!mobile || mobile.length < 10) {
     toast('Please enter a valid 10-digit mobile number', 'error');
@@ -1909,10 +2108,9 @@ function openWhatsApp() {
 }
 
 function copyMessage() {
-  const t = DB.tenants[currentTenantIdx];
-  const idx = parseInt(document.getElementById('wa_entrySelect').value);
-  const entry = t.entries[idx];
-  const msg = buildBillMessage(t, entry);
+  const message = currentWaMessage();
+  const msg = message.text;
+  if (!msg) { toast(message.problem.split('\n')[0], 'error'); return; }
   navigator.clipboard.writeText(msg).then(() => {
     toast('Message copied to clipboard!', 'success');
   }).catch(() => {
@@ -2213,6 +2411,365 @@ function toast(msg, type = '') {
   el.className = 'show ' + type;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ─────────────────────────────────────────────
+// METER READING PLAUSIBILITY
+// ─────────────────────────────────────────────
+// The arithmetic checks in getEntryIssues only prove an entry is consistent
+// with itself. These checks ask a different question: is this reading believable
+// for this room? A single wrong digit turns 5963 into 59630 and quietly bills
+// lakhs, so the reading is compared against the room's own past usage. Nothing
+// here blocks a save — it only asks Dad to look again.
+
+function getUsageHistory(tenant) {
+  return (tenant.entries || [])
+    .map(entry => Number(entry.consumed))
+    .filter(value => Number.isFinite(value) && value > 0)
+    .slice(-12);
+}
+
+function medianOf(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function getReadingWarning(tenant, unitStart, unitFinal, rate) {
+  const start = Number(unitStart) || 0;
+  const final = Number(unitFinal);
+  if (!tenant || !Number.isFinite(final) || final <= start) return null;
+
+  const consumed = final - start;
+  const typical = medianOf(getUsageHistory(tenant));
+  const bill = Math.round(consumed * (Number(rate) || 0));
+
+  // An extra digit is the classic typo and is worth flagging on its own.
+  const extraDigit = start > 0 && String(Math.round(final)).length > String(Math.round(start)).length;
+  // Generous thresholds: a hot-summer month should not nag him every time.
+  const limit = typical == null ? 900 : Math.max(typical * 4, typical + 300, 400);
+  if (!extraDigit && consumed <= limit) return null;
+
+  const usual = typical == null
+    ? 'There is no earlier reading for this room to compare against.'
+    : `This room usually uses about ${fmt(Math.round(typical))} units a month.`;
+  const digitNote = extraDigit ? ' The reading also has one digit more than the previous one.' : '';
+  return `Please check this reading. ${usual} ${fmt(consumed)} units would bill ₹${fmt(bill)}.${digitNote}`;
+}
+
+// ─────────────────────────────────────────────
+// MONTH ENTRY — all rooms on one screen
+// ─────────────────────────────────────────────
+let monthEntryFilter = 'pending';
+let monthEntryMonth = '';
+let monthEntryDraft = {};
+
+// The meter reading and balance carried in from before this month. Using the
+// month rather than "the latest entry" keeps a back-filled month correct.
+function getMeterBeforeMonth(tenant, month) {
+  const earlier = (tenant.entries || []).filter(entry => String(entry.month || '') < month).sort(compareEntries);
+  for (let i = earlier.length - 1; i >= 0; i--) {
+    if (earlier[i].unitFinal) return Number(earlier[i].unitFinal);
+  }
+  return Number(tenant.lastMeter) || 0;
+}
+
+function monthEntryRows() {
+  return DB.tenants
+    .map((tenant, tenantIndex) => ({ tenant, tenantIndex }))
+    .filter(row => !row.tenant.checkedOut)
+    .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat));
+}
+
+function draftFor(tenantIndex) {
+  if (!monthEntryDraft[tenantIndex]) monthEntryDraft[tenantIndex] = {};
+  return monthEntryDraft[tenantIndex];
+}
+
+// Everything a row needs, derived fresh from the draft plus stored history.
+function computeMonthEntryRow(tenantIndex, month) {
+  const tenant = DB.tenants[tenantIndex];
+  const draft = draftFor(tenantIndex);
+  const start = getMeterBeforeMonth(tenant, month);
+  const previous = getBalanceBeforeMonth(tenant, month);
+  const rate = Number(tenant.elecRate) || 9;
+  const rent = Number(tenant.rent) || 0;
+
+  const finalRaw = String(draft.final == null ? '' : draft.final).trim();
+  const paidRaw = String(draft.paid == null ? '' : draft.paid).trim();
+  const hasFinal = finalRaw !== '';
+  const hasPaid = paidRaw !== '';
+
+  // A room with a payment but no new reading simply used no units this month.
+  const final = hasFinal ? Number(finalRaw) : start;
+  const paid = hasPaid ? Number(paidRaw) : 0;
+
+  const result = {
+    tenant, tenantIndex, start, previous, rate, rent, final, paid,
+    touched: hasFinal || hasPaid,
+    error: null, warning: null
+  };
+  if (!result.touched) return result;
+
+  if (!Number.isFinite(final)) result.error = 'Meter reading is not a number.';
+  else if (final < start) result.error = `Final reading ${fmt(final)} is below the previous reading ${fmt(start)}.`;
+  else if (hasPaid && !Number.isFinite(paid)) result.error = 'Amount paid is not a number.';
+
+  result.consumed = result.error ? 0 : final - start;
+  result.elecBill = roundMoney(result.consumed * rate);
+  result.totalDue = roundMoney(rent + result.elecBill + previous);
+  result.outstanding = roundMoney(result.totalDue - (Number.isFinite(paid) ? paid : 0));
+  if (!result.error) result.warning = getReadingWarning(tenant, start, final, rate);
+  return result;
+}
+
+function setMonthEntryFilter(filter) {
+  monthEntryFilter = filter;
+  document.getElementById('me_showPending').classList.toggle('active', filter === 'pending');
+  document.getElementById('me_showAll').classList.toggle('active', filter === 'all');
+  renderMonthEntry();
+}
+
+function applyMonthEntryDefaults() {
+  const date = document.getElementById('me_defaultDate').value;
+  const mode = document.getElementById('me_defaultMode').value;
+  monthEntryRows().forEach(({ tenantIndex }) => {
+    const draft = draftFor(tenantIndex);
+    const dateInput = document.getElementById('me_date_' + tenantIndex);
+    const modeInput = document.getElementById('me_mode_' + tenantIndex);
+    if (dateInput && !draft.dateTouched) { draft.date = date; dateInput.value = date; }
+    if (modeInput && !draft.modeTouched) { draft.mode = mode; modeInput.value = mode; }
+  });
+}
+
+function renderMonthEntry() {
+  const monthInput = document.getElementById('me_month');
+  if (!monthInput) return;
+  if (!monthInput.value) monthInput.value = currentMonthString();
+  const month = monthInput.value;
+
+  // Switching months starts a clean sheet rather than carrying stale numbers.
+  if (month !== monthEntryMonth) { monthEntryDraft = {}; monthEntryMonth = month; }
+
+  const dateInput = document.getElementById('me_defaultDate');
+  if (!dateInput.value) dateInput.value = toDateInput(new Date());
+  const modeSelect = document.getElementById('me_defaultMode');
+  if (!modeSelect.options.length) modeSelect.innerHTML = paymentModeOptions('');
+
+  const rows = monthEntryRows();
+  const done = rows.filter(({ tenant }) => getMonthEntry(tenant, month));
+  const pending = rows.filter(({ tenant }) => !getMonthEntry(tenant, month));
+
+  document.getElementById('me_progressText').textContent =
+    `${done.length} of ${rows.length} rooms entered for ${fmtMonth(month)}`;
+  document.getElementById('me_progressSub').textContent = pending.length
+    ? `${pending.length} still to enter`
+    : 'Every room is done for this month.';
+
+  const visible = monthEntryFilter === 'pending' ? pending : rows;
+  const list = document.getElementById('me_list');
+
+  if (!visible.length) {
+    list.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="es-icon">✅</div>${
+      monthEntryFilter === 'pending'
+        ? 'Nothing left to enter for ' + fmtMonth(month) + '.'
+        : 'No active rooms to show.'}</div>`;
+    updateMonthEntrySaveHint();
+    return;
+  }
+
+  list.innerHTML = visible.map(({ tenant, tenantIndex }) => {
+    const existing = getMonthEntry(tenant, month);
+    if (existing) {
+      const balance = Number(existing.outstanding) || 0;
+      const state = balance > 0 ? `₹${fmt(balance)} due` : balance < 0 ? `₹${fmt(-balance)} credit` : 'Clear';
+      return `<div class="me-card done">
+        <div class="me-head">
+          <div><div class="me-flat">${escapeHtml(tenant.flat)}</div><div class="me-name">${escapeHtml(tenant.name)}</div></div>
+          <div style="text-align:right;"><div class="me-prev">Meter ${fmt(existing.unitFinal)}</div><div class="me-prev">${fmt(existing.consumed)} units</div></div>
+        </div>
+        <div class="me-calc">Rent <strong>₹${fmt(existing.rent)}</strong> · Electricity <strong>₹${fmt(existing.elecBill)}</strong> · Paid <strong>₹${fmt(existing.paid)}</strong> · Closing <strong>${state}</strong></div>
+        <div class="me-done-note">✅ Already entered — <button class="btn btn-edit btn-sm" type="button" onclick="openTenant(${tenantIndex})">Open room to edit</button></div>
+      </div>`;
+    }
+
+    const draft = draftFor(tenantIndex);
+    if (draft.date == null) draft.date = dateInput.value;
+    if (draft.mode == null) draft.mode = modeSelect.value;
+    const start = getMeterBeforeMonth(tenant, month);
+    const previous = getBalanceBeforeMonth(tenant, month);
+    const previousText = previous > 0 ? `Previous ₹${fmt(previous)} due`
+      : previous < 0 ? `Previous ₹${fmt(-previous)} credit` : 'No previous balance';
+
+    return `<div class="me-card" id="me_card_${tenantIndex}">
+      <div class="me-head">
+        <div><div class="me-flat">${escapeHtml(tenant.flat)}</div><div class="me-name">${escapeHtml(tenant.name)}</div></div>
+        <div style="text-align:right;">
+          <div class="me-prev">Meter now ${fmt(start)}</div>
+          <div class="me-prev">${previousText}</div>
+        </div>
+      </div>
+      <div class="me-fields">
+        <div>
+          <label>Final reading</label>
+          <input type="number" inputmode="numeric" id="me_final_${tenantIndex}" value="${escapeAttr(draft.final == null ? '' : draft.final)}" placeholder="${fmt(start)}" oninput="onMonthEntryInput(${tenantIndex})">
+        </div>
+        <div>
+          <label>Paid ₹</label>
+          <input type="number" inputmode="numeric" id="me_paid_${tenantIndex}" value="${escapeAttr(draft.paid == null ? '' : draft.paid)}" placeholder="0" oninput="onMonthEntryInput(${tenantIndex})">
+        </div>
+        <div>
+          <label>Pay date</label>
+          <input type="date" id="me_date_${tenantIndex}" value="${escapeAttr(draft.date || '')}" onchange="onMonthEntryInput(${tenantIndex}, 'date')">
+        </div>
+        <div>
+          <label>Mode</label>
+          <select id="me_mode_${tenantIndex}" onchange="onMonthEntryInput(${tenantIndex}, 'mode')">${paymentModeOptions(draft.mode || '')}</select>
+        </div>
+      </div>
+      <div class="me-calc" id="me_calc_${tenantIndex}"></div>
+      <div id="me_flag_${tenantIndex}"></div>
+    </div>`;
+  }).join('');
+
+  visible.forEach(({ tenant, tenantIndex }) => {
+    if (!getMonthEntry(tenant, month)) updateMonthEntryRow(tenantIndex);
+  });
+  updateMonthEntrySaveHint();
+}
+
+function onMonthEntryInput(tenantIndex, field) {
+  const draft = draftFor(tenantIndex);
+  const finalInput = document.getElementById('me_final_' + tenantIndex);
+  const paidInput = document.getElementById('me_paid_' + tenantIndex);
+  const dateInput = document.getElementById('me_date_' + tenantIndex);
+  const modeInput = document.getElementById('me_mode_' + tenantIndex);
+  if (finalInput) draft.final = finalInput.value;
+  if (paidInput) draft.paid = paidInput.value;
+  if (dateInput) draft.date = dateInput.value;
+  if (modeInput) draft.mode = modeInput.value;
+  if (field === 'date') draft.dateTouched = true;
+  if (field === 'mode') draft.modeTouched = true;
+  updateMonthEntryRow(tenantIndex);
+  updateMonthEntrySaveHint();
+}
+
+// Only this card is redrawn, so typing never steals focus from the field.
+function updateMonthEntryRow(tenantIndex) {
+  const month = document.getElementById('me_month').value;
+  const row = computeMonthEntryRow(tenantIndex, month);
+  const card = document.getElementById('me_card_' + tenantIndex);
+  const calc = document.getElementById('me_calc_' + tenantIndex);
+  const flag = document.getElementById('me_flag_' + tenantIndex);
+  if (!card || !calc || !flag) return;
+
+  card.classList.remove('filled', 'warn', 'error');
+  if (row.error) card.classList.add('error');
+  else if (row.warning) card.classList.add('warn');
+  else if (row.touched) card.classList.add('filled');
+
+  if (!row.touched) {
+    calc.innerHTML = `Rent <strong>₹${fmt(row.rent)}</strong> · rate ₹${row.rate}/unit. Enter a reading to bill this room.`;
+    flag.innerHTML = '';
+    return;
+  }
+
+  if (row.error) {
+    calc.innerHTML = `Rent <strong>₹${fmt(row.rent)}</strong> · rate ₹${row.rate}/unit`;
+    flag.innerHTML = `<div class="me-flag error">${escapeHtml(row.error)}</div>`;
+    return;
+  }
+
+  const closing = row.outstanding > 0
+    ? `<strong style="color:var(--red)">₹${fmt(row.outstanding)} due</strong>`
+    : row.outstanding < 0
+      ? `<strong style="color:var(--blue)">₹${fmt(-row.outstanding)} credit</strong>`
+      : '<strong style="color:var(--green)">Clear</strong>';
+  const previousText = row.previous > 0
+    ? `· Previous <strong>₹${fmt(row.previous)} due</strong> `
+    : row.previous < 0 ? `· Previous <strong>₹${fmt(-row.previous)} credit</strong> ` : '';
+  calc.innerHTML = `${fmt(row.consumed)} units × ₹${row.rate} = <strong>₹${fmt(row.elecBill)}</strong>
+    · Rent <strong>₹${fmt(row.rent)}</strong>
+    ${previousText}
+    <br>Total due <strong>₹${fmt(row.totalDue)}</strong> · Paid <strong>₹${fmt(row.paid)}</strong> → Closing ${closing}`;
+  flag.innerHTML = row.warning ? `<div class="me-flag warn">⚠️ ${escapeHtml(row.warning)}</div>` : '';
+}
+
+function collectMonthEntryRows() {
+  const month = document.getElementById('me_month').value;
+  return monthEntryRows()
+    .filter(({ tenant }) => !getMonthEntry(tenant, month))
+    .map(({ tenantIndex }) => computeMonthEntryRow(tenantIndex, month))
+    .filter(row => row.touched);
+}
+
+function updateMonthEntrySaveHint() {
+  const hint = document.getElementById('me_saveHint');
+  if (!hint) return;
+  const rows = collectMonthEntryRows();
+  const ready = rows.filter(row => !row.error);
+  const problems = rows.length - ready.length;
+  if (!rows.length) {
+    hint.textContent = 'Fill in a reading or a payment to get started.';
+    return;
+  }
+  hint.textContent = `${ready.length} room${ready.length === 1 ? '' : 's'} ready to save`
+    + (problems ? ` · ${problems} need${problems === 1 ? 's' : ''} fixing first` : '');
+}
+
+function saveMonthEntries() {
+  const month = document.getElementById('me_month').value;
+  if (!month) { toast('Please choose a month first', 'error'); return; }
+
+  const rows = collectMonthEntryRows();
+  if (!rows.length) { toast('Nothing to save yet — enter a reading or a payment.', 'error'); return; }
+
+  const broken = rows.filter(row => row.error);
+  const ready = rows.filter(row => !row.error);
+  if (!ready.length) { toast('Please fix the highlighted rooms first.', 'error'); return; }
+  if (broken.length && !confirm(
+    `${broken.length} room${broken.length === 1 ? '' : 's'} (${broken.map(row => row.tenant.flat).join(', ')}) `
+    + `still need${broken.length === 1 ? 's' : ''} fixing and will be skipped.\n\nSave the other ${ready.length}?`
+  )) return;
+
+  const flagged = ready.filter(row => row.warning);
+  if (flagged.length && !confirm(
+    `Unusual meter readings in ${flagged.length} room${flagged.length === 1 ? '' : 's'}: `
+    + `${flagged.map(row => row.tenant.flat).join(', ')}.\n\nSave them as entered?`
+  )) return;
+
+  ready.forEach(row => {
+    const tenant = row.tenant;
+    const entry = {
+      id: Date.now() + row.tenantIndex,
+      month,
+      rent: row.rent,
+      unitStart: row.start,
+      unitFinal: row.final,
+      consumed: row.consumed,
+      rate: row.rate,
+      elecBill: row.elecBill,
+      lastOutstanding: row.previous,
+      totalDue: row.totalDue,
+      paid: row.paid,
+      outstanding: row.outstanding,
+      payDate: row.paid ? (draftFor(row.tenantIndex).date || '') : '',
+      payMode: row.paid ? (draftFor(row.tenantIndex).mode || '') : '',
+      remarks: ''
+    };
+    if (!Array.isArray(tenant.entries)) tenant.entries = [];
+    tenant.entries.push(entry);
+    tenant.entries.sort(compareEntries);
+    // Recalculate from this entry onward so a back-filled month flows through.
+    recalculateBalanceChain(tenant, tenant.entries.findIndex(item => item.id === entry.id));
+  });
+
+  // One snapshot for the whole batch, so a mistake is a single Undo away.
+  saveData(DB, { label: `Month entry for ${fmtMonth(month)} (${ready.length} room${ready.length === 1 ? '' : 's'})` });
+  monthEntryDraft = {};
+  renderMonthEntry();
+  toast(`Saved ${ready.length} room${ready.length === 1 ? '' : 's'} for ${fmtMonth(month)}`, 'success');
 }
 
 // ─────────────────────────────────────────────
@@ -2862,11 +3419,14 @@ function defaultReportFlat() {
 
 function onReportTypeChange() {
   const type = document.getElementById('reportType').value;
-  document.getElementById('reportMonthWrap').style.display = type === 'month' ? '' : 'none';
-  document.getElementById('reportFlatWrap').style.display = type === 'tenant' ? '' : 'none';
-  const shareable = type === 'tenant';
+  // A receipt needs both pickers: which room, and which month's payment.
+  document.getElementById('reportMonthWrap').style.display = (type === 'month' || type === 'receipt') ? '' : 'none';
+  document.getElementById('reportFlatWrap').style.display = (type === 'tenant' || type === 'receipt') ? '' : 'none';
+  const shareable = type === 'tenant' || type === 'receipt';
   document.getElementById('reportShareBtn').style.display = shareable ? '' : 'none';
   document.getElementById('reportCopyBtn').style.display = shareable ? '' : 'none';
+  // A receipt is something to print or send, not a spreadsheet.
+  document.getElementById('reportExcelBtn').style.display = type === 'receipt' ? 'none' : '';
   renderReport();
 }
 
@@ -2889,6 +3449,9 @@ function renderReport() {
   } else if (type === 'tenant') {
     html = buildTenantStatementDoc(Number(flatSelect.value));
     hint.textContent = 'The full payment history of one room, with a signature line — this is the copy to hand or send to the tenant.';
+  } else if (type === 'receipt') {
+    html = buildReceiptDoc(Number(flatSelect.value), monthInput.value);
+    hint.textContent = 'A receipt for one month’s payment. Print it, or send it on WhatsApp straight to the tenant.';
   } else {
     html = buildLedgerDoc();
     hint.textContent = 'Every entry of every room. The Excel file has an “All Entries” sheet plus one tab per room, like the old workbook; printing it can run to several pages.';
@@ -2910,30 +3473,47 @@ function downloadCurrentReport() {
     const tenantIndex = Number(document.getElementById('reportFlat').value);
     if (!DB.tenants[tenantIndex]) return;
     downloadTenantWorkbook(tenantIndex);
+  } else if (type === 'receipt') {
+    toast('A receipt is meant to be printed or sent, not opened in Excel.', 'error');
   } else {
     downloadWorkbook(`Jasmine_FullRecord_${toDateInput(new Date())}.xlsx`, buildLedgerWorkbook());
   }
 }
 
-function shareCurrentReport() {
+// Text for whichever of the two shareable reports is on screen.
+function currentReportText() {
   const tenantIndex = Number(document.getElementById('reportFlat').value);
   const tenant = DB.tenants[tenantIndex];
-  if (!tenant) return;
-  const message = buildTenantStatementText(tenantIndex);
+  if (!tenant) return { text: null, problem: 'Select a room first.' };
+  if (document.getElementById('reportType').value !== 'receipt') {
+    return { tenant, text: buildTenantStatementText(tenantIndex) };
+  }
+  const month = document.getElementById('reportMonth').value || currentMonthString();
+  const entry = getMonthEntry(tenant, month);
+  if (!entry) return { tenant, text: null, problem: `Room ${tenant.flat} has no entry for ${fmtMonth(month)} yet.` };
+  const receipt = buildReceiptMessage(tenant, entry);
+  return receipt
+    ? { tenant, text: receipt }
+    : { tenant, text: null, problem: `No payment is recorded for Room ${tenant.flat} in ${fmtMonth(month)}, so there is nothing to receipt.` };
+}
+
+function shareCurrentReport() {
+  const { tenant, text, problem } = currentReportText();
+  if (!text) { toast(problem, 'error'); return; }
   const mobile = String(tenant.mobile || '').replace(/\D/g, '');
   if (mobile.length < 10) {
     copyCurrentReport();
-    toast('No mobile number saved for this room — the record was copied instead.', 'error');
+    toast('No mobile number saved for this room — the text was copied instead.', 'error');
     return;
   }
   const number = mobile.length === 10 ? '91' + mobile : mobile;
-  window.open('https://wa.me/' + number + '?text=' + encodeURIComponent(message), '_blank');
+  window.open('https://wa.me/' + number + '?text=' + encodeURIComponent(text), '_blank');
 }
 
 function copyCurrentReport() {
-  const tenantIndex = Number(document.getElementById('reportFlat').value);
-  const message = buildTenantStatementText(tenantIndex);
-  if (!message) return;
+  const { text, problem } = currentReportText();
+  if (!text) { toast(problem, 'error'); return; }
+  const message = text;
   navigator.clipboard.writeText(message)
     .then(() => toast('Payment record copied — paste it anywhere.', 'success'))
     .catch(() => {
