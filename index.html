@@ -496,6 +496,10 @@
     .flat-card .flat-num { font-size: 20px; }
     .home-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   }
+  .tenant-section { border:1px solid #dde3ea; border-radius:8px; margin:12px 0; padding:14px; }
+  .tenant-section summary { cursor:pointer; font-weight:700; color:var(--blue); margin-bottom:12px; }
+  .tenant-section .form-group { min-width:220px; flex:1 1 260px; }
+  .tenant-section textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font:inherit; }
 </style>
 </head>
 <body>
@@ -881,7 +885,7 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>💵 Amount Paid by Tenant (₹)</label>
+          <label>💵 Payment 1 received (₹)</label>
           <input type="number" id="b_paid" placeholder="Enter amount received" oninput="calcBilling()">
         </div>
         <div class="form-group">
@@ -903,6 +907,13 @@
           </select>
         </div>
       </div>
+      <details open style="margin-bottom:16px;"><summary>Payment 2 (optional installment)</summary>
+        <div class="form-row">
+          <div class="form-group"><label for="b_paid2">Payment 2 received (₹)</label><input type="number" min="0" step="0.01" id="b_paid2" oninput="calcBilling()"></div>
+          <div class="form-group"><label for="b_payDate2">Payment 2 date</label><input type="date" id="b_payDate2"></div>
+          <div class="form-group"><label for="b_payMode2">Payment 2 mode</label><select id="b_payMode2"></select></div>
+        </div>
+      </details>
       <div class="form-row">
         <div class="form-group">
           <label>Remaining Outstanding (₹)</label>
@@ -936,7 +947,7 @@
             <th>Total Due</th>
             <th>Paid</th>
             <th>Outstanding</th>
-            <th>Pay Date</th>
+            <th>Payment details</th>
             <th>Mode</th>
             <th>Remarks</th>
             <th></th>
@@ -1026,6 +1037,7 @@
 <div id="printArea" class="rep-doc"></div>
 
 <script src="./history_data.js"></script>
+<script src="./tenant-details.js?v=1"></script>
 <script>
 // ─────────────────────────────────────────────
 // DATA LAYER — localStorage
@@ -1495,10 +1507,10 @@ function openTenant(idx) {
   const balanceLabel = outstanding > 0 ? 'Outstanding' : outstanding < 0 ? 'Credit' : 'Clear';
   document.getElementById('tenantHeader').innerHTML = `
     <div class="th-main">
-      <h2>Flat ${t.flat} — ${t.name}</h2>
+      <h2>Flat ${escapeHtml(t.flat)} — ${escapeHtml(t.name)}</h2>
       <div class="th-meta">
         Monthly Rent: <strong>₹${fmt(t.rent)}</strong>
-        ${t.mobile ? ' · 📞 ' + t.mobile : ''}
+        ${t.mobile ? ' · 📞 ' + escapeHtml(t.mobile) : ''}
         ${t.startDate ? ' · Since ' + fmtDate(t.startDate) : ''}
       </div>
     </div>
@@ -1534,6 +1546,9 @@ function prefillBilling() {
   document.getElementById('b_rent').value = t.rent;
   document.getElementById('b_payDate').value = toDateInput(now);
   document.getElementById('b_paid').value = '';
+  document.getElementById('b_paid2').value = '';
+  document.getElementById('b_payDate2').value = '';
+  document.getElementById('b_payMode2').innerHTML = paymentModeOptions('');
   document.getElementById('b_remarks').value = '';
   document.getElementById('b_elecRate').value = t.elecRate || 9;
 
@@ -1571,7 +1586,7 @@ function calcBilling() {
   const rate = parseFloat(document.getElementById('b_elecRate').value) || 9;
   const rent = parseFloat(document.getElementById('b_rent').value) || 0;
   const lastOutstanding = parseFloat(document.getElementById('b_lastOutstanding').value) || 0;
-  const paid = parseFloat(document.getElementById('b_paid').value) || 0;
+  const paid = roundMoney(roundMoney(Number(document.getElementById('b_paid').value) || 0) + roundMoney(Number(document.getElementById('b_paid2').value) || 0));
 
   const consumed = Math.max(0, unitFinal - unitStart);
   const elecBill = consumed * rate;
@@ -1596,7 +1611,9 @@ function saveBillingEntry() {
   const unitStart = parseFloat(document.getElementById('b_unitStart').value) || 0;
   const unitFinal = parseFloat(document.getElementById('b_unitFinal').value) || 0;
   const rate = parseFloat(document.getElementById('b_elecRate').value) || 9;
-  const paid = parseFloat(document.getElementById('b_paid').value) || 0;
+  const paid = roundMoney(roundMoney(Number(document.getElementById('b_paid').value) || 0) + roundMoney(Number(document.getElementById('b_paid2').value) || 0));
+  const payments = readPaymentInputs('b');
+  if (!payments) return;
   const payDate = document.getElementById('b_payDate').value;
   const payMode = document.getElementById('b_payMode').value;
   const remarks = document.getElementById('b_remarks').value.trim();
@@ -1631,6 +1648,7 @@ function saveBillingEntry() {
     lastOutstanding,
     totalDue,
     paid,
+    payments,
     outstanding,
     payDate,
     payMode,
@@ -1673,8 +1691,8 @@ function renderHistory() {
       <td>₹${fmt(e.totalDue)}</td>
       <td>₹${fmt(e.paid)}</td>
       <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : e.outstanding < 0 ? 'badge-blue' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : e.outstanding < 0 ? 'credit' : 'clear'}</span></td>
-      <td>${e.payDate ? fmtDate(e.payDate) : '—'}</td>
-      <td>${e.payMode || '—'}</td>
+      <td>${paymentSummaryHtml(e)}</td>
+      <td>${escapeHtml(paymentModes(e) || '—')}</td>
       <td>${e.remarks ? escapeHtml(e.remarks) : '—'}</td>
       <td><div class="history-actions"><button class="btn btn-edit btn-sm" onclick="openEditEntry(${JSON.stringify(e.id)})">Edit</button><button class="btn btn-danger btn-sm" onclick="confirmDelete(${JSON.stringify(e.id)})">Delete</button></div></td>
     </tr>
@@ -1707,10 +1725,14 @@ function openEditEntry(entryId) {
       <div class="form-group"><label>Electricity Bill (₹)</label><input type="number" id="e_elecBill" value="${numberValue(e.elecBill)}"><span class="hint" id="e_meterHint"></span></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Amount Paid (₹)</label><input type="number" id="e_paid" value="${numberValue(e.paid)}"></div>
+      <div class="form-group"><label>Payment 1 received (₹)</label><input type="number" id="e_paid" value="${numberValue(entryPayments(e)[0].amount)}"></div>
       <div class="form-group"><label>Payment Date</label><input type="date" id="e_payDate" value="${escapeAttr(e.payDate || '')}"></div>
       <div class="form-group"><label>Payment Mode</label><select id="e_payMode">${paymentModeOptions(e.payMode)}</select></div>
     </div>
+    <h4>Payment 2 (optional installment)</h4><div class="form-row">
+      <div class="form-group"><label>Payment 2 received (₹)</label><input type="number" min="0" step="0.01" id="e_paid2" value="${numberValue(entryPayments(e)[1].amount)}"></div>
+      <div class="form-group"><label>Payment 2 date</label><input type="date" id="e_payDate2" value="${escapeAttr(entryPayments(e)[1].date)}"></div>
+      <div class="form-group"><label>Payment 2 mode</label><select id="e_payMode2">${paymentModeOptions(entryPayments(e)[1].mode)}</select></div></div>
     <div class="form-group"><label>Remarks</label><input type="text" id="e_remarks" value="${escapeAttr(e.remarks || '')}"></div>
   `;
   updateEditMeterBill(false);
@@ -1747,6 +1769,8 @@ function saveEditedEntry() {
   if (![unitStart, unitFinal, rate, elecBill].every(Number.isFinite) || unitFinal < unitStart || rate < 0 || elecBill < 0) {
     toast('Check the meter readings, rate and electricity bill.', 'error'); return;
   }
+  const payments = readPaymentInputs('e');
+  if (!payments) return;
   entry.month = month;
   entry.rent = nonNegativeNumber('e_rent');
   entry.unitStart = unitStart;
@@ -1755,7 +1779,8 @@ function saveEditedEntry() {
   entry.rate = rate;
   entry.meterBill = roundMoney(entry.consumed * rate);
   entry.elecBill = elecBill;
-  entry.paid = nonNegativeNumber('e_paid');
+  entry.payments = payments;
+  entry.paid = roundMoney(payments.reduce((total, payment) => total + payment.amount, 0));
   entry.payDate = document.getElementById('e_payDate').value;
   entry.payMode = document.getElementById('e_payMode').value;
   entry.remarks = document.getElementById('e_remarks').value.trim();
@@ -1796,62 +1821,6 @@ function closeModal(id) {
 // ─────────────────────────────────────────────
 // TENANT INFO FORM
 // ─────────────────────────────────────────────
-function renderTenantInfoForm() {
-  const t = DB.tenants[currentTenantIdx];
-  document.getElementById('tenantInfoForm').innerHTML = `
-    <div class="form-row">
-      <div class="form-group"><label>Flat Number</label><input type="text" id="ti_flat" value="${t.flat}"></div>
-      <div class="form-group"><label>Tenant Name</label><input type="text" id="ti_name" value="${t.name}"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Monthly Rent (₹)</label><input type="number" id="ti_rent" value="${t.rent}"></div>
-      <div class="form-group"><label>Security Deposit (₹)</label><input type="number" id="ti_security" value="${t.security || ''}"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Mobile Number</label><input type="tel" id="ti_mobile" value="${t.mobile || ''}"></div>
-      <div class="form-group"><label>Rent Start Date</label><input type="date" id="ti_startDate" value="${t.startDate || ''}"></div>
-      <div class="form-group"><label>Monthly Rent Due Day</label><input type="number" id="ti_dueDay" min="1" max="28" value="${getDueDay(t)}"><span class="hint">Reminder appears after 4 full days</span></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Address</label><input type="text" id="ti_address" value="${t.address || ''}"></div>
-      <div class="form-group"><label>Email</label><input type="email" id="ti_email" value="${t.email || ''}"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>ID Proof Type</label>
-        <select id="ti_idType">
-          ${['','Aadhaar Card','PAN Card','Passport','Voter ID','Driving Licence'].map(v => `<option ${t.idType===v?'selected':''}>${v}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group"><label>ID Proof Number</label><input type="text" id="ti_idNum" value="${t.idNum || ''}"></div>
-      <div class="form-group"><label>Date of Birth</label><input type="date" id="ti_dob" value="${t.dob || ''}"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Initial Meter Reading</label><input type="number" id="ti_lastMeter" value="${t.lastMeter || 0}"></div>
-      <div class="form-group"><label>Electricity Rate (₹/unit)</label><input type="number" id="ti_elecRate" value="${t.elecRate || 9}"></div>
-    </div>
-  `;
-}
-
-function saveTenantInfo() {
-  const t = DB.tenants[currentTenantIdx];
-  t.flat = document.getElementById('ti_flat').value.trim();
-  t.name = document.getElementById('ti_name').value.trim();
-  t.rent = parseFloat(document.getElementById('ti_rent').value) || t.rent;
-  t.security = parseFloat(document.getElementById('ti_security').value) || 0;
-  t.mobile = document.getElementById('ti_mobile').value.trim();
-  t.startDate = document.getElementById('ti_startDate').value;
-  t.dueDay = normalizeDueDay(document.getElementById('ti_dueDay').value, t.startDate);
-  t.address = document.getElementById('ti_address').value.trim();
-  t.email = document.getElementById('ti_email').value.trim();
-  t.idType = document.getElementById('ti_idType').value;
-  t.idNum = document.getElementById('ti_idNum').value.trim();
-  t.dob = document.getElementById('ti_dob').value;
-  t.lastMeter = parseFloat(document.getElementById('ti_lastMeter').value) || 0;
-  t.elecRate = parseFloat(document.getElementById('ti_elecRate').value) || 9;
-  saveData(DB, { label: 'Edited tenant details for Flat ' + t.flat });
-  toast('Tenant info saved!', 'success');
-  openTenant(currentTenantIdx);
-}
 
 function checkoutTenant() {
   const tenant = DB.tenants[currentTenantIdx];
@@ -2021,7 +1990,7 @@ Rent: ₹${fmt(entry.rent)}
 ${receiptElectricityLine(entry)}
 ${previousLine}Total due: ₹${fmt(entry.totalDue)}
 
-*Amount received: ₹${fmt(paid)}*${entry.payDate ? `\nPaid on: ${fmtDate(entry.payDate)}` : ''}${entry.payMode ? `\nMode: ${entry.payMode}` : ''}
+*Amount received: ₹${fmt(paid)}*\n${paymentSummary(entry)}
 
 ${balanceLine}
 
@@ -2063,7 +2032,7 @@ function buildReceiptDoc(tenantIndex, month) {
         ${row('<strong>Total due</strong>', '<strong>' + money(entry.totalDue) + '</strong>')}
       </tbody>
       <tfoot>
-        <tr><td class="tl">Amount received${entry.payDate ? ` on ${fmtDate(entry.payDate)}` : ''}${entry.payMode ? ` · ${escapeHtml(entry.payMode)}` : ''}</td><td>${money(paid)}</td></tr>
+        <tr><td class="tl">Amount received<br>${paymentSummaryHtml(entry)}</td><td>${money(paid)}</td></tr>
         <tr><td class="tl">Balance</td><td>${balanceCell(balance)}</td></tr>
       </tfoot>
     </table>
@@ -2406,7 +2375,7 @@ function escapeAttr(value) {
 function paymentModeOptions(selected = '') {
   const modes = ['', 'Cash', 'Online Transfer', 'HDFC Bank', 'IDFC Bank', 'PhonePe', 'Google Pay', 'Paytm', 'Cheque'];
   if (selected && !modes.includes(selected)) modes.push(selected);
-  return modes.map(mode => `<option value="${escapeAttr(mode)}" ${mode === selected ? 'selected' : ''}>${mode || 'Select…'}</option>`).join('');
+  return modes.map(mode => `<option value="${escapeAttr(mode)}" ${mode === selected ? 'selected' : ''}>${escapeHtml(mode || 'Select…')}</option>`).join('');
 }
 
 function fmt(n) {
@@ -2525,11 +2494,12 @@ function computeMonthEntryRow(tenantIndex, month) {
   const finalRaw = String(draft.final == null ? '' : draft.final).trim();
   const paidRaw = String(draft.paid == null ? '' : draft.paid).trim();
   const hasFinal = finalRaw !== '';
-  const hasPaid = paidRaw !== '';
+  const paid2Raw = String(draft.paid2 == null ? '' : draft.paid2).trim();
+  const hasPaid = paidRaw !== '' || paid2Raw !== '';
 
   // A room with a payment but no new reading simply used no units this month.
   const final = hasFinal ? Number(finalRaw) : start;
-  const paid = hasPaid ? Number(paidRaw) : 0;
+  const paid = roundMoney(roundMoney(Number(paidRaw)) + roundMoney(Number(paid2Raw)));
 
   const result = {
     tenant, tenantIndex, start, previous, rate, rent, final, paid,
@@ -2540,7 +2510,7 @@ function computeMonthEntryRow(tenantIndex, month) {
 
   if (!Number.isFinite(final)) result.error = 'Meter reading is not a number.';
   else if (final < start) result.error = `Final reading ${fmt(final)} is below the previous reading ${fmt(start)}.`;
-  else if (hasPaid && !Number.isFinite(paid)) result.error = 'Amount paid is not a number.';
+  else if (![Number(paidRaw), Number(paid2Raw)].every(n => Number.isFinite(n) && n >= 0)) result.error = 'Payments must be valid, non-negative amounts.';
 
   result.consumed = result.error ? 0 : final - start;
   result.elecBill = roundMoney(result.consumed * rate);
@@ -2642,7 +2612,7 @@ function renderMonthEntry() {
           <input type="number" inputmode="numeric" id="me_final_${tenantIndex}" value="${escapeAttr(draft.final == null ? '' : draft.final)}" placeholder="${fmt(start)}" oninput="onMonthEntryInput(${tenantIndex})">
         </div>
         <div>
-          <label>Paid ₹</label>
+          <label>Payment 1 ₹</label>
           <input type="number" inputmode="numeric" id="me_paid_${tenantIndex}" value="${escapeAttr(draft.paid == null ? '' : draft.paid)}" placeholder="0" oninput="onMonthEntryInput(${tenantIndex})">
         </div>
         <div>
@@ -2654,6 +2624,11 @@ function renderMonthEntry() {
           <select id="me_mode_${tenantIndex}" onchange="onMonthEntryInput(${tenantIndex}, 'mode')">${paymentModeOptions(draft.mode || '')}</select>
         </div>
       </div>
+      <details><summary>Payment 2 (optional)</summary><div class="me-fields">
+        <div><label>Payment 2 ₹</label><input type="number" min="0" step="0.01" id="me_paid2_${tenantIndex}" value="${escapeAttr(draft.paid2 || '')}" oninput="onMonthEntryInput(${tenantIndex})"></div>
+        <div><label>Payment 2 date</label><input type="date" id="me_date2_${tenantIndex}" value="${escapeAttr(draft.date2 || '')}" onchange="onMonthEntryInput(${tenantIndex})"></div>
+        <div><label>Payment 2 mode</label><select id="me_mode2_${tenantIndex}" onchange="onMonthEntryInput(${tenantIndex})">${paymentModeOptions(draft.mode2 || '')}</select></div>
+      </div></details>
       <div class="me-calc" id="me_calc_${tenantIndex}"></div>
       <div id="me_flag_${tenantIndex}"></div>
     </div>`;
@@ -2673,6 +2648,7 @@ function onMonthEntryInput(tenantIndex, field) {
   const modeInput = document.getElementById('me_mode_' + tenantIndex);
   if (finalInput) draft.final = finalInput.value;
   if (paidInput) draft.paid = paidInput.value;
+  ['paid2', 'date2', 'mode2'].forEach(key => { const input = document.getElementById('me_' + key + '_' + tenantIndex); if (input) draft[key] = input.value; });
   if (dateInput) draft.date = dateInput.value;
   if (modeInput) draft.mode = modeInput.value;
   if (field === 'date') draft.dateTouched = true;
@@ -2779,6 +2755,7 @@ function saveMonthEntries() {
       lastOutstanding: row.previous,
       totalDue: row.totalDue,
       paid: row.paid,
+      payments: draftPayments(draftFor(row.tenantIndex)),
       outstanding: row.outstanding,
       payDate: row.paid ? (draftFor(row.tenantIndex).date || '') : '',
       payMode: row.paid ? (draftFor(row.tenantIndex).mode || '') : '',
@@ -2878,7 +2855,7 @@ function buildMonthReportDoc(month) {
       <td>${entry ? money(entry.lastOutstanding) : '—'}</td>
       <td>${entry ? money(entry.totalDue) : '—'}</td>
       <td>${entry ? money(entry.paid) : '—'}</td>
-      <td>${entry && entry.payDate ? fmtDate(entry.payDate) : '—'}</td>
+      <td>${entry ? paymentSummaryHtml(entry) : '—'}</td>
       <td>${entry ? balanceCell(entry.outstanding) : '—'}</td>
       <td class="tl">${status}</td>
     </tr>`;
@@ -2897,7 +2874,7 @@ function buildMonthReportDoc(month) {
     <table class="rep-table">
       <thead><tr>
         <th class="tl">Room</th><th class="tl">Tenant</th><th>Rent</th><th>Electricity</th>
-        <th>Previous</th><th>Total Due</th><th>Paid</th><th>Pay Date</th><th>Closing Balance</th><th class="tl">Status</th>
+        <th>Previous</th><th>Total Due</th><th>Paid</th><th>Payment details</th><th>Closing Balance</th><th class="tl">Status</th>
       </tr></thead>
       <tbody>${body || '<tr><td colspan="10" style="text-align:center;padding:18px;">No rooms to show for this month.</td></tr>'}</tbody>
       <tfoot><tr>
@@ -2938,8 +2915,8 @@ function buildTenantStatementDoc(tenantIndex) {
       <td>${money(entry.lastOutstanding)}</td>
       <td>${money(entry.totalDue)}</td>
       <td>${money(entry.paid)}</td>
-      <td>${entry.payDate ? fmtDate(entry.payDate) : '—'}</td>
-      <td class="tl">${escapeHtml(entry.payMode || '—')}</td>
+      <td>${paymentSummaryHtml(entry)}</td>
+      <td class="tl">${escapeHtml(paymentModes(entry) || '—')}</td>
       <td>${balanceCell(entry.outstanding)}</td>
     </tr>`).join('');
 
@@ -2957,7 +2934,7 @@ function buildTenantStatementDoc(tenantIndex) {
     <table class="rep-table">
       <thead><tr>
         <th class="tl">Month</th><th>Rent</th><th>Electricity</th><th>Previous</th>
-        <th>Total Due</th><th>Paid</th><th>Pay Date</th><th class="tl">Mode</th><th>Closing Balance</th>
+        <th>Total Due</th><th>Paid</th><th>Payment details</th><th class="tl">Mode</th><th>Closing Balance</th>
       </tr></thead>
       <tbody>${body || '<tr><td colspan="9" style="text-align:center;padding:18px;">No billing entries recorded for this room yet.</td></tr>'}</tbody>
       <tfoot><tr>
@@ -2998,7 +2975,7 @@ function buildLedgerDoc() {
       <td>${money(entry.lastOutstanding)}</td>
       <td>${money(entry.totalDue)}</td>
       <td>${money(entry.paid)}</td>
-      <td>${entry.payDate ? fmtDate(entry.payDate) : '—'}</td>
+      <td>${paymentSummaryHtml(entry)}</td>
       <td>${balanceCell(entry.outstanding)}</td>
     </tr>`).join('');
 
@@ -3013,7 +2990,7 @@ function buildLedgerDoc() {
     <table class="rep-table">
       <thead><tr>
         <th class="tl">Room</th><th class="tl">Tenant</th><th class="tl">Month</th><th>Rent</th><th>Electricity</th>
-        <th>Previous</th><th>Total Due</th><th>Paid</th><th>Pay Date</th><th>Closing Balance</th>
+        <th>Previous</th><th>Total Due</th><th>Paid</th><th>Payment details</th><th>Closing Balance</th>
       </tr></thead>
       <tbody>${body || '<tr><td colspan="10" style="text-align:center;padding:18px;">No billing entries recorded yet.</td></tr>'}</tbody>
     </table>
@@ -3200,7 +3177,7 @@ function buildTenantStatementText(tenantIndex) {
   const lines = entries.map(entry => {
     const balance = Number(entry.outstanding) || 0;
     const balanceText = balance > 0 ? `Balance ₹${fmt(balance)} due` : balance < 0 ? `Balance ₹${fmt(-balance)} credit` : 'Clear';
-    return `${fmtMonth(entry.month)}: Rent ₹${fmt(entry.rent)} + Electricity ₹${fmt(entry.elecBill)} = ₹${fmt(entry.totalDue)} | Paid ₹${fmt(entry.paid)}${entry.payDate ? ' on ' + fmtDate(entry.payDate) : ''} | ${balanceText}`;
+    return `${fmtMonth(entry.month)}: Rent ₹${fmt(entry.rent)} + Electricity ₹${fmt(entry.elecBill)} = ₹${fmt(entry.totalDue)} | Paid ₹${fmt(entry.paid)} | ${paymentSummary(entry)} | ${balanceText}`;
   });
   const closing = totals.closing > 0
     ? `₹${fmt(totals.closing)} due`
@@ -3445,8 +3422,8 @@ function downloadWorkbook(filename, sheets) {
 
 // ── Workbook contents ──
 const ENTRY_HEADER = ['Rent', 'Unit Start', 'Unit Final', 'Units', 'Rate', 'Electricity', 'Previous Balance',
-  'Total Due', 'Paid', 'Pay Date', 'Mode', 'Closing Balance', 'Status', 'Remarks'];
-const ENTRY_WIDTHS = [10, 11, 11, 8, 7, 12, 15, 12, 11, 13, 15, 15, 12, 34];
+  'Total Due', 'Paid', 'Payment details', 'Mode', 'Closing Balance', 'Status', 'Remarks'];
+const ENTRY_WIDTHS = [10, 11, 11, 8, 7, 12, 15, 12, 11, 55, 15, 15, 12, 34];
 
 function entryStatus(entry) {
   if (!entry) return 'Not entered';
@@ -3464,7 +3441,7 @@ function entryCells(entry) {
     xNum(entry.rent), xNum(entry.unitStart, XS.cell), xNum(entry.unitFinal, XS.cell),
     xNum(entry.consumed, XS.cell), xNum(entry.rate, XS.cell), xNum(entry.elecBill),
     xNum(entry.lastOutstanding), xNum(entry.totalDue), xNum(entry.paid),
-    xDate(entry.payDate), xText(entry.payMode || ''), xNum(entry.outstanding),
+    xText(paymentSummary(entry)), xText(paymentModes(entry)), xNum(entry.outstanding),
     xText(entryStatus(entry)), xText(entry.remarks || '')
   ];
 }

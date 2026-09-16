@@ -9,3 +9,7 @@ wrangler.toml
 functions
 schema.sql
 CLOUDFLARE_SETUP.md
+
+tests
+tests/**
+README.md

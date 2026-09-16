@@ -1,8 +1,9 @@
-const CACHE_NAME = 'jasmine-residency-shell-v5';
+const CACHE_NAME = 'jasmine-residency-shell-v7';
 const APP_SHELL = [
   './',
   './index.html',
   './history_data.js',
+  './tenant-details.js?v=1',
   './manifest.webmanifest'
 ];
 
