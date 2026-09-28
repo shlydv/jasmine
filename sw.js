@@ -1,9 +1,13 @@
-const CACHE_NAME = 'jasmine-residency-shell-v7';
+const CACHE_NAME = 'jasmine-residency-shell-v8';
 const APP_SHELL = [
   './',
   './index.html',
   './history_data.js',
-  './tenant-details.js?v=1',
+  './tenant-details.js?v=2',
+  './verification.js?v=2',
+  './verification.css?v=2',
+  './electricity.js?v=2',
+  './attachments.js?v=2',
   './manifest.webmanifest'
 ];
 
@@ -38,6 +42,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
+          if (!response.ok || response.redirected || !response.headers.get('content-type')?.includes('text/html')) return response;
           const copy = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy));
           return response;
@@ -49,8 +54,10 @@ self.addEventListener('fetch', event => {
 
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+      if (response.ok && !response.redirected) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+      }
       return response;
     }))
   );

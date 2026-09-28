@@ -1,0 +1,1 @@
+Vendored browser-only libraries: tesseract.js 6.0.1, tesseract.js-core 6.1.2, English best_int language data, pdfjs-dist 5.7.284. All OCR code and language data are served from this app; uploaded documents are never sent to an OCR provider.

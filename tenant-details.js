@@ -49,51 +49,30 @@ function tenantField([key,label,type = 'text'], tenant) {
   const value = tenant[key] ?? (key === 'dueDay' ? getDueDay(tenant) : '');
   const attrs = `id="ti_${key}" name="${key}"`;
   let input;
-  if (type === 'textarea') input = `<textarea ${attrs} rows="3">${escapeHtml(String(value))}</textarea>`;
+  if (key === 'dob') input = dobInput('ti_dob', String(value));
+  else if (type === 'textarea') input = `<textarea ${attrs} rows="3">${escapeHtml(String(value))}</textarea>`;
   else if (type === 'select') input = `<select ${attrs}>${[...new Set(['','Aadhaar Card','PAN Card','Passport','Voter ID','Driving Licence','Other', String(value)])].map(option => `<option ${value === option ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}</select>`;
   else input = `<input ${attrs} type="${type}" value="${escapeAttr(String(value))}" ${type === 'number' ? `min="${key === 'dueDay' ? 1 : 0}" step="any" ${key === 'dueDay' ? 'max="28"' : ''}` : ''}>`;
   return `<div class="form-group"><label for="ti_${key}">${label}</label>${input}</div>`;
 }
 function renderTenantInfoForm() {
   const t = DB.tenants[currentTenantIdx];
+  initAttachmentDraft(t);
   tenantMediaDraft = Object.fromEntries(TENANT_MEDIA.map(([key]) => [key, safeTenantImage(t[key])]));
   document.getElementById('tenantInfoForm').innerHTML = `<p class="hint">Save the details once for verification and agreements. Optional fields can be left blank.</p>` +
     TENANT_SECTIONS.map(([title, fields], i) => `<details class="tenant-section" ${i < 2 ? 'open' : ''}><summary>${title}</summary><div class="form-row">${fields.map(field => tenantField(field,t)).join('')}</div></details>`).join('') +
-    `<details class="tenant-section"><summary>Photograph and signatures</summary><p class="hint">Upload JPG, PNG or WebP images up to 5 MB. Images are resized for storage. Save Changes to keep uploads or removals.</p><div class="form-row">${TENANT_MEDIA.map(([key,label]) => `<div class="form-group"><label for="ti_${key}">${label}</label><input type="file" id="ti_${key}" accept="image/jpeg,image/png,image/webp" onchange="uploadTenantImage('${key}',this)"><div id="ti_preview_${key}">${tenantImagePreview(key)}</div><button class="btn btn-sm" type="button" onclick="removeTenantImage('${key}')">Remove image</button></div>`).join('')}</div></details>
+    documentSection() + `<details class="tenant-section"><summary>Photograph and signatures</summary><p class="hint">Upload JPG, PNG or WebP images up to 5 MB. Photos are compressed and stored separately. Save Changes to keep uploads or removals; cloud sync uploads the files.</p><div class="form-row">${TENANT_MEDIA.map(([key,label]) => `<div class="form-group"><label for="ti_${key}">${label}</label><input type="file" id="ti_${key}" accept="image/jpeg,image/png,image/webp" onchange="uploadTenantImage('${key}',this)"><div id="ti_preview_${key}">${tenantImagePreview(key)}</div><button class="btn btn-sm" type="button" onclick="removeTenantImage('${key}')">Remove image</button></div>`).join('')}</div></details>
     <div style="margin:16px 0"><button class="btn btn-primary btn-sm" type="button" onclick="printTenantVerification()">Print verification details / PDF</button> <button class="btn btn-primary btn-sm" type="button" onclick="previewAgreementDraft()">Preview agreement draft</button><span class="hint"> Uses the current form values.</span></div>`;
+  renderDocumentList();
+  refreshTenantMedia();
 }
 function tenantImagePreview(key) {
   const src = safeTenantImage(tenantMediaDraft[key]);
   return src ? `<img src="${src}" alt="${key}" style="max-width:180px;max-height:130px;object-fit:contain;margin:8px 0">` : '<span class="hint">No image selected</span>';
 }
-async function uploadTenantImage(key, input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) { toast('Choose a JPG, PNG or WebP image smaller than 5 MB.', 'error'); input.value = ''; return; }
-  const tenantIndex = currentTenantIdx;
-  const draft = tenantMediaDraft;
-  tenantMediaPending++;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 480 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.drawImage(bitmap,0,0,canvas.width,canvas.height); bitmap.close();
-    let data = canvas.toDataURL('image/jpeg',0.8);
-    if (data.length > 40000) data = canvas.toDataURL('image/jpeg',0.5);
-    if (data.length > 40000) throw new Error('Image too large');
-    if (tenantIndex !== currentTenantIdx || draft !== tenantMediaDraft) return;
-    tenantMediaDraft[key] = data;
-    document.getElementById('ti_preview_' + key).innerHTML = tenantImagePreview(key);
-  } catch (error) { toast('Could not read this image. Try a smaller JPG or PNG.', 'error'); }
-  finally { tenantMediaPending--; input.value = ''; }
-}
-function removeTenantImage(key) {
-  tenantMediaDraft[key] = '';
-  document.getElementById('ti_preview_' + key).innerHTML = tenantImagePreview(key);
-}
 function readTenantInfo() {
   if (tenantMediaPending) { toast('Please wait for the image upload to finish.', 'error'); return null; }
+  if (!updateDob('ti_dob', true)) return null;
   const t = {...DB.tenants[currentTenantIdx]};
   for (const [,fields] of TENANT_SECTIONS) for (const [key,label,type] of fields) {
     const input = document.getElementById('ti_' + key);
@@ -103,6 +82,8 @@ function readTenantInfo() {
   if (!t.flat || !t.name) { toast('Flat number and tenant name are required.', 'error'); return null; }
   t.dueDay = normalizeDueDay(t.dueDay, t.startDate);
   ['rent','security','lastMeter','elecRate'].forEach(key => t[key] = Number(t[key]) || 0);
+  t.documents=tenantDocumentDraft.map(ref=>({...ref}));
+  for(const [key] of TENANT_MEDIA)t[key+'File']=tenantMediaFileDraft[key]||null;
   return Object.assign(t, tenantMediaDraft);
 }
 function saveTenantInfo() {
@@ -115,13 +96,6 @@ function saveTenantInfo() {
   catch (error) { DB.tenants[currentTenantIdx] = previous; toast('Could not save. Device storage may be full; remove large images and try again.', 'error'); return; }
   openTenant(currentTenantIdx); switchTab('info'); toast('Tenant info saved!', 'success');
 }
-function printTenantVerification() {
-  const t = readTenantInfo(); if (!t) return;
-  const html = `<h1>Tenant / Paying Guest Verification Details</h1><p>Gurugram, Haryana</p>` + TENANT_SECTIONS.filter(([title]) => !['Tenancy and billing','Agreement details'].includes(title)).map(([title,fields]) => `<section style="break-inside:auto"><h2 style="font-size:16px;margin-top:20px">${title}</h2><table class="rep-table"><tbody>${(title === 'Tenant personal details' ? [['name','Full name'],...fields] : fields).map(([key,label]) => `<tr><td class="tl" style="width:38%">${label}</td><td class="tl" style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(String(t[key] || '________________________'))}</td></tr>`).join('')}</tbody></table></section>`).join('') +
-    `<h2>Photograph and signatures</h2><div style="display:flex;gap:36px">${TENANT_MEDIA.map(([key,label]) => `<div>${label}<br>${safeTenantImage(t[key]) ? `<img src="${t[key]}" style="max-width:160px;max-height:120px">` : '<br>____________________'}</div>`).join('')}</div><p>I declare that the information above is true and correct to the best of my knowledge.</p><p>Place: ____________________ Date: ____________________</p><p>Prepared from tenant records for completing the verification application.</p>`;
-  printDoc(html);
-}
-
 // Keep paid as the aggregate for existing reports, balances and historical imports.
 function entryPayments(entry) {
   const blank = () => ({amount:0,date:'',mode:''});

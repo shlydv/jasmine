@@ -500,7 +500,10 @@
   .tenant-section summary { cursor:pointer; font-weight:700; color:var(--blue); margin-bottom:12px; }
   .tenant-section .form-group { min-width:220px; flex:1 1 260px; }
   .tenant-section textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font:inherit; }
+  .extra-meter{border:1px solid #cdd9e5;border-radius:8px;padding:12px;margin:12px 0}.extra-meter legend{font-weight:700;color:var(--blue)}
+  .document-row{border-bottom:1px solid #ddd;padding:12px 0;overflow-wrap:anywhere}#ocrReview{margin:12px 0}#ocrReview input[type=checkbox]{width:auto;margin-right:6px}
 </style>
+<link rel="stylesheet" href="./verification.css?v=2">
 </head>
 <body>
 
@@ -679,7 +682,7 @@
 
   <div class="card" style="margin-bottom:20px;">
     <h3 style="color:var(--green);">⬇️ Export — Save a Backup</h3>
-    <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Downloads all tenant data and billing history as a <strong>.json</strong> file. Keep this file safe — it's your full backup.</p>
+    <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Downloads tenant data, billing history, saved photographs and ID documents as a <strong>.json</strong> file. Keep this file safe — it's your full backup.</p>
     <button class="btn btn-success" style="font-size:17px; padding:14px 28px;" onclick="exportData()">⬇️ Download Backup File</button>
     <div id="exportInfo" style="margin-top:12px; font-size:13px; color:var(--gray);"></div>
   </div>
@@ -799,7 +802,7 @@
       </div>
       <div class="form-group">
         <label>Date of Birth</label>
-        <input type="date" id="nt_dob">
+        <div id="newDobInput"></div>
       </div>
     </div>
     <div class="form-row">
@@ -827,8 +830,10 @@
     <button class="tab-btn" onclick="switchTab('history')">📋 History</button>
     <button class="tab-btn" onclick="switchTab('send')">📲 Send Bill</button>
     <button class="tab-btn" onclick="switchTab('info')">👤 Tenant Info</button>
+    <button class="tab-btn" onclick="switchTab('meters')">⚡ Electricity meters</button>
   </div>
 
+  <div class="tab-panel" id="tab-meters"><div class="card"><h3>Electricity meters</h3><div id="meterSettings"></div></div></div>
   <!-- BILLING TAB -->
   <div class="tab-panel active" id="tab-billing">
     <div class="card">
@@ -836,7 +841,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Month</label>
-          <input type="month" id="b_month">
+          <input type="month" id="b_month" onchange="prepareBillingMeters();calcBilling()">
         </div>
         <div class="form-group">
           <label>Rent Amount (₹)</label>
@@ -867,9 +872,10 @@
           <input type="number" id="b_elecRate" value="9">
         </div>
       </div>
+      <div id="b_extraMeters"></div><div id="b_meterError" class="hint" role="status"></div>
       <div class="form-row">
         <div class="form-group">
-          <label>Electricity Bill (₹)</label>
+          <label>Total electricity — all meters (₹)</label>
           <input type="number" id="b_elecBill" readonly>
           <span class="hint">Auto-calculated</span>
         </div>
@@ -1037,7 +1043,10 @@
 <div id="printArea" class="rep-doc"></div>
 
 <script src="./history_data.js"></script>
-<script src="./tenant-details.js?v=1"></script>
+<script src="./tenant-details.js?v=2"></script>
+<script src="./verification.js?v=2"></script>
+<script src="./electricity.js?v=2"></script>
+<script src="./attachments.js?v=2"></script>
 <script>
 // ─────────────────────────────────────────────
 // DATA LAYER — localStorage
@@ -1407,12 +1416,13 @@ function switchTab(name, button = null) {
   if (button) {
     button.classList.add('active');
   } else {
-    const tabIndex = { billing: 0, history: 1, send: 2, info: 3 }[name];
+    const tabIndex = { billing: 0, history: 1, send: 2, info: 3, meters: 4 }[name];
     const tabs = document.querySelectorAll('#screen-tenant .tab-btn');
     if (tabIndex !== undefined && tabs[tabIndex]) tabs[tabIndex].classList.add('active');
   }
   if (name === 'history') renderHistory();
   if (name === 'info') renderTenantInfoForm();
+  if (name === 'meters') renderMeterSettings();
   if (name === 'send') renderSendBill();
 }
 
@@ -1532,7 +1542,7 @@ function openTenant(idx) {
 
   // Reset to billing tab
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
-  document.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('active', i === 0));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-billing'));
 
   // Pre-fill billing form
   prefillBilling();
@@ -1550,7 +1560,7 @@ function prefillBilling() {
   document.getElementById('b_payDate2').value = '';
   document.getElementById('b_payMode2').innerHTML = paymentModeOptions('');
   document.getElementById('b_remarks').value = '';
-  document.getElementById('b_elecRate').value = t.elecRate || 9;
+  document.getElementById('b_elecRate').value = t.elecRate ?? 9;
 
   // Last meter reading
   const lastMeter = getLastMeter(t);
@@ -1563,6 +1573,7 @@ function prefillBilling() {
   document.getElementById('b_lastOutstanding').value = outstanding;
   document.getElementById('b_totalDue').value = t.rent + outstanding;
   document.getElementById('b_remaining').value = '';
+  prepareBillingMeters();
 }
 
 function getLastMeter(t) {
@@ -1583,15 +1594,17 @@ function calcBilling() {
 
   const unitStart = parseFloat(document.getElementById('b_unitStart').value) || 0;
   const unitFinal = parseFloat(document.getElementById('b_unitFinal').value) || 0;
-  const rate = parseFloat(document.getElementById('b_elecRate').value) || 9;
+  const rate = Number(document.getElementById('b_elecRate').value);
   const rent = parseFloat(document.getElementById('b_rent').value) || 0;
   const lastOutstanding = parseFloat(document.getElementById('b_lastOutstanding').value) || 0;
   const paid = roundMoney(roundMoney(Number(document.getElementById('b_paid').value) || 0) + roundMoney(Number(document.getElementById('b_paid2').value) || 0));
 
   const consumed = Math.max(0, unitFinal - unitStart);
-  const elecBill = consumed * rate;
+  const extra = billingMeterResult();
+  const elecBill = roundMoney(consumed * rate + (extra.total || 0));
   const totalDue = rent + elecBill + lastOutstanding;
   const remaining = totalDue - paid;
+  document.getElementById('b_meterError').textContent=extra.error||'';
 
   document.getElementById('b_unitConsumed').value = consumed || '';
   document.getElementById('b_elecBill').value = elecBill || '';
@@ -1610,7 +1623,7 @@ function saveBillingEntry() {
   const rent = parseFloat(document.getElementById('b_rent').value) || 0;
   const unitStart = parseFloat(document.getElementById('b_unitStart').value) || 0;
   const unitFinal = parseFloat(document.getElementById('b_unitFinal').value) || 0;
-  const rate = parseFloat(document.getElementById('b_elecRate').value) || 9;
+  const rate = Number(document.getElementById('b_elecRate').value);
   const paid = roundMoney(roundMoney(Number(document.getElementById('b_paid').value) || 0) + roundMoney(Number(document.getElementById('b_paid2').value) || 0));
   const payments = readPaymentInputs('b');
   if (!payments) return;
@@ -1624,14 +1637,16 @@ function saveBillingEntry() {
     if (confirm(fmtMonth(month) + ' already exists. Edit that transaction instead?')) openEditEntry(existingMonth.id);
     return;
   }
-  if (!unitFinal && unitFinal !== 0) { toast('Please enter the final meter reading', 'error'); return; }
+  if (document.getElementById('b_unitFinal').value === '' || !Number.isFinite(unitFinal) || !Number.isFinite(rate) || rate < 0) { toast('Enter the final reading and a valid electricity rate.', 'error'); return; }
   if (unitFinal < unitStart) { toast('Final meter reading cannot be less than start reading', 'error'); return; }
 
   const readingWarning = getReadingWarning(t, unitStart, unitFinal, rate);
   if (readingWarning && !confirm(readingWarning + '\n\nSave this entry anyway?')) return;
 
   const consumed = unitFinal - unitStart;
-  const elecBill = consumed * rate;
+  const extra = billingMeterResult(true);
+  if (extra.error) return;
+  const elecBill = roundMoney(consumed * rate + extra.total);
   const lastOutstanding = parseFloat(document.getElementById('b_lastOutstanding').value) || 0;
   const totalDue = rent + elecBill + lastOutstanding;
   const outstanding = totalDue - paid;
@@ -1645,6 +1660,7 @@ function saveBillingEntry() {
     consumed,
     rate,
     elecBill,
+    meters: [primaryMeter(t,unitStart,unitFinal,rate,consumed*rate), ...extra.meters],
     lastOutstanding,
     totalDue,
     paid,
@@ -1658,6 +1674,7 @@ function saveBillingEntry() {
   if (!t.entries) t.entries = [];
   t.entries.push(entry);
   t.entries.sort(compareEntries);
+  recalculateBalanceChain(t, t.entries.findIndex(e => e.id === entry.id));
   t.elecRate = rate;
   saveData(DB, { label: 'Added billing entry for Flat ' + t.flat });
 
@@ -1687,7 +1704,7 @@ function renderHistory() {
     <tr>
       <td><strong>${fmtMonth(e.month)}</strong>${e.tenantName && e.tenantName !== t.name ? `<br><small style="color:var(--gray);">Renter: ${escapeHtml(e.tenantName)}</small>` : ''}${issues.length ? `<span class="math-warning">Check: ${issues.join(' · ')}</span>` : ''}</td>
       <td>₹${fmt(e.rent)}</td>
-      <td>₹${fmt(e.elecBill)}<br><small style="color:var(--gray)">${e.unitStart != null && e.unitFinal != null ? `${e.consumed} units × ₹${e.rate}${e.meterBill != null && e.meterBill !== e.elecBill ? ` · meter ₹${fmt(e.meterBill)}` : ''}` : 'Meter reading not recorded'}</small></td>
+      <td>₹${fmt(e.elecBill)}<br><small style="white-space:pre-line">${escapeHtml(electricityDescription(e))}</small></td>
       <td>₹${fmt(e.totalDue)}</td>
       <td>₹${fmt(e.paid)}</td>
       <td><span class="badge ${e.outstanding > 0 ? 'badge-red' : e.outstanding < 0 ? 'badge-blue' : 'badge-green'}">₹${fmt(Math.abs(e.outstanding))} ${e.outstanding > 0 ? 'due' : e.outstanding < 0 ? 'credit' : 'clear'}</span></td>
@@ -1721,7 +1738,7 @@ function openEditEntry(entryId) {
     <div class="form-row">
       <div class="form-group"><label>Start Units</label><input type="number" id="e_unitStart" value="${numberValue(e.unitStart)}" oninput="updateEditMeterBill()"></div>
       <div class="form-group"><label>Final Units</label><input type="number" id="e_unitFinal" value="${numberValue(e.unitFinal)}" oninput="updateEditMeterBill()"></div>
-      <div class="form-group"><label>Rate (₹/unit)</label><input type="number" id="e_rate" value="${numberValue(e.rate || t.elecRate || 9)}" oninput="updateEditMeterBill()"></div>
+      <div class="form-group"><label>Rate (₹/unit)</label><input type="number" id="e_rate" value="${numberValue(e.rate ?? t.elecRate ?? 9)}" oninput="updateEditMeterBill()"></div>
       <div class="form-group"><label>Electricity Bill (₹)</label><input type="number" id="e_elecBill" value="${numberValue(e.elecBill)}"><span class="hint" id="e_meterHint"></span></div>
     </div>
     <div class="form-row">
@@ -1733,6 +1750,8 @@ function openEditEntry(entryId) {
       <div class="form-group"><label>Payment 2 received (₹)</label><input type="number" min="0" step="0.01" id="e_paid2" value="${numberValue(entryPayments(e)[1].amount)}"></div>
       <div class="form-group"><label>Payment 2 date</label><input type="date" id="e_payDate2" value="${escapeAttr(entryPayments(e)[1].date)}"></div>
       <div class="form-group"><label>Payment 2 mode</label><select id="e_payMode2">${paymentModeOptions(entryPayments(e)[1].mode)}</select></div></div>
+    <div id="e_extraMeters">${meterRowsHtml('e', entryMeterRows(e), 'updateEditMeterBill()')}</div>
+    <button class="btn btn-sm" type="button" onclick="addEditMeters()">Add configured meters to this bill</button>
     <div class="form-group"><label>Remarks</label><input type="text" id="e_remarks" value="${escapeAttr(e.remarks || '')}"></div>
   `;
   updateEditMeterBill(false);
@@ -1744,11 +1763,12 @@ function updateEditMeterBill(updateAmount = true) {
   const end = Number(document.getElementById('e_unitFinal').value);
   const rate = Number(document.getElementById('e_rate').value);
   const valid = Number.isFinite(start) && Number.isFinite(end) && Number.isFinite(rate) && end >= start && rate >= 0;
-  const calculated = valid ? roundMoney((end - start) * rate) : null;
+  const extra=calculateMeterRows(readMeterRows('e'));
+  const calculated = valid && !extra.error ? roundMoney((end - start) * rate + extra.total) : null;
   const tenant = DB.tenants[currentTenantIdx];
   const warning = valid ? getReadingWarning(tenant, start, end, rate) : null;
   document.getElementById('e_meterHint').textContent = calculated == null
-    ? 'Check the meter readings.'
+    ? (extra.error || 'Check the meter readings.')
     : (warning ? '⚠️ ' + warning : 'Meter calculation: ₹' + fmt(calculated) + '. You may override the bill if needed.');
   document.getElementById('e_meterHint').style.color = warning ? '#8a4b00' : '';
   if (updateAmount && calculated != null) document.getElementById('e_elecBill').value = calculated;
@@ -1769,6 +1789,8 @@ function saveEditedEntry() {
   if (![unitStart, unitFinal, rate, elecBill].every(Number.isFinite) || unitFinal < unitStart || rate < 0 || elecBill < 0) {
     toast('Check the meter readings, rate and electricity bill.', 'error'); return;
   }
+  const extra=calculateMeterRows(readMeterRows('e'));
+  if(extra.error){toast(extra.error,'error');return;}
   const payments = readPaymentInputs('e');
   if (!payments) return;
   entry.month = month;
@@ -1777,7 +1799,8 @@ function saveEditedEntry() {
   entry.unitFinal = unitFinal;
   entry.consumed = unitFinal - unitStart;
   entry.rate = rate;
-  entry.meterBill = roundMoney(entry.consumed * rate);
+  entry.meterBill = roundMoney(entry.consumed * rate + extra.total);
+  entry.meters = [primaryMeter(t,unitStart,unitFinal,rate,entry.consumed*rate),...extra.meters];
   entry.elecBill = elecBill;
   entry.payments = payments;
   entry.paid = roundMoney(payments.reduce((total, payment) => total + payment.amount, 0));
@@ -1862,6 +1885,7 @@ function startNewTenantForCurrentFlat() {
 }
 
 function resetTenantForm() {
+  document.getElementById('newDobInput').innerHTML = dobInput('nt_dob');
   ['nt_flat','nt_name','nt_rent','nt_security','nt_mobile','nt_startDate','nt_address','nt_email','nt_idNum','nt_dob','nt_meterStart'].forEach(id => {
     document.getElementById(id).value = '';
   });
@@ -1879,7 +1903,7 @@ function startNewTenantForFlat(previousTenant) {
   document.getElementById('nt_flat').value = previousTenant.flat || '';
   document.getElementById('nt_rent').value = previousTenant.rent || '';
   document.getElementById('nt_meterStart').value = getLastMeter(previousTenant) || '';
-  document.getElementById('nt_elecRate').value = previousTenant.elecRate || 9;
+  document.getElementById('nt_elecRate').value = previousTenant.elecRate ?? 9;
   document.getElementById('nt_dueDay').value = getDueDay(previousTenant);
   const hint = document.getElementById('newTenantHint');
   hint.textContent = 'New renter for Flat ' + previousTenant.flat + '. Previous renter and billing history are preserved.';
@@ -1959,7 +1983,7 @@ function receiptNumber(tenant, entry) {
 }
 
 function receiptElectricityLine(entry) {
-  const detail = entry.unitStart != null && entry.unitFinal != null
+  const detail = entry.meters?.length > 1 ? ` (${entry.meters.length} meters)` : entry.unitStart != null && entry.unitFinal != null
     ? ` (${fmt(entry.consumed)} units × ₹${entry.rate})`
     : '';
   return `Electricity${detail}: ₹${fmt(entry.elecBill)}`;
@@ -1988,6 +2012,7 @@ For the month of: ${fmtMonth(entry.month)}
 
 Rent: ₹${fmt(entry.rent)}
 ${receiptElectricityLine(entry)}
+${entry.meters?.length > 1 ? electricityDescription(entry) : ''}
 ${previousLine}Total due: ₹${fmt(entry.totalDue)}
 
 *Amount received: ₹${fmt(paid)}*\n${paymentSummary(entry)}
@@ -2025,7 +2050,7 @@ function buildReceiptDoc(tenantIndex, month) {
       <tbody>
         ${row('Rent', money(entry.rent))}
         ${row('Electricity' + (entry.unitStart != null && entry.unitFinal != null
-          ? ` <small style="color:#666;">(${fmt(entry.consumed)} units × ₹${entry.rate})</small>` : ''), money(entry.elecBill))}
+          ? ` <small style="color:#666;">(${escapeHtml(electricityDescription(entry))})</small>` : ''), money(entry.elecBill))}
         ${entry.lastOutstanding ? row(
           Number(entry.lastOutstanding) < 0 ? 'Less advance brought forward' : 'Add previous balance due',
           money(Math.abs(Number(entry.lastOutstanding)))) : ''}
@@ -2058,7 +2083,7 @@ Name- ${t.name}
 Flat No =${t.flat}
 Rent Month=${fmtMonth(entry.month)}
 Last Outstanding=${outstandingText}
-${meterText}
+${entry.meters?.length > 1 ? electricityDescription(entry) : meterText}
 ${entry.meterBill != null && entry.meterBill !== entry.elecBill ? 'Meter Bill=' + entry.meterBill + '\n' : ''}Billed Amount=${entry.elecBill}
 Rent=${entry.rent}
 ${balanceText}`;
@@ -2124,6 +2149,7 @@ function copyMessage() {
 // ADD TENANT
 // ─────────────────────────────────────────────
 function addTenant() {
+  if (!updateDob('nt_dob', true)) return;
   const flat = document.getElementById('nt_flat').value.trim();
   const name = document.getElementById('nt_name').value.trim();
   const rent = parseFloat(document.getElementById('nt_rent').value) || 0;
@@ -2488,7 +2514,7 @@ function computeMonthEntryRow(tenantIndex, month) {
   const draft = draftFor(tenantIndex);
   const start = getMeterBeforeMonth(tenant, month);
   const previous = getBalanceBeforeMonth(tenant, month);
-  const rate = Number(tenant.elecRate) || 9;
+  const rate = Number(tenant.elecRate ?? 9);
   const rent = Number(tenant.rent) || 0;
 
   const finalRaw = String(draft.final == null ? '' : draft.final).trim();
@@ -2503,7 +2529,7 @@ function computeMonthEntryRow(tenantIndex, month) {
 
   const result = {
     tenant, tenantIndex, start, previous, rate, rent, final, paid,
-    touched: hasFinal || hasPaid,
+    touched: hasFinal || hasPaid || (draft.extraMeters || []).some(m => m.final !== '' || m.amount !== ''),
     error: null, warning: null
   };
   if (!result.touched) return result;
@@ -2513,7 +2539,10 @@ function computeMonthEntryRow(tenantIndex, month) {
   else if (![Number(paidRaw), Number(paid2Raw)].every(n => Number.isFinite(n) && n >= 0)) result.error = 'Payments must be valid, non-negative amounts.';
 
   result.consumed = result.error ? 0 : final - start;
-  result.elecBill = roundMoney(result.consumed * rate);
+  const extra=calculateMeterRows(extraMeterDrafts(tenant,month,draft.extraMeters));
+  if (extra.error) result.error=extra.error;
+  result.meters=[primaryMeter(tenant,start,final,rate,result.consumed*rate),...(extra.meters||[])];
+  result.elecBill = roundMoney(result.consumed * rate + (extra.total||0));
   result.totalDue = roundMoney(rent + result.elecBill + previous);
   result.outstanding = roundMoney(result.totalDue - (Number.isFinite(paid) ? paid : 0));
   if (!result.error) result.warning = getReadingWarning(tenant, start, final, rate);
@@ -2629,6 +2658,7 @@ function renderMonthEntry() {
         <div><label>Payment 2 date</label><input type="date" id="me_date2_${tenantIndex}" value="${escapeAttr(draft.date2 || '')}" onchange="onMonthEntryInput(${tenantIndex})"></div>
         <div><label>Payment 2 mode</label><select id="me_mode2_${tenantIndex}" onchange="onMonthEntryInput(${tenantIndex})">${paymentModeOptions(draft.mode2 || '')}</select></div>
       </div></details>
+      ${meterRowsHtml('me_'+tenantIndex,extraMeterDrafts(tenant,month,draft.extraMeters),`onMonthEntryInput(${tenantIndex})`)}
       <div class="me-calc" id="me_calc_${tenantIndex}"></div>
       <div id="me_flag_${tenantIndex}"></div>
     </div>`;
@@ -2651,6 +2681,7 @@ function onMonthEntryInput(tenantIndex, field) {
   ['paid2', 'date2', 'mode2'].forEach(key => { const input = document.getElementById('me_' + key + '_' + tenantIndex); if (input) draft[key] = input.value; });
   if (dateInput) draft.date = dateInput.value;
   if (modeInput) draft.mode = modeInput.value;
+  draft.extraMeters=readMeterRows('me_'+tenantIndex);
   if (field === 'date') draft.dateTouched = true;
   if (field === 'mode') draft.modeTouched = true;
   updateMonthEntryRow(tenantIndex);
@@ -2691,7 +2722,7 @@ function updateMonthEntryRow(tenantIndex) {
   const previousText = row.previous > 0
     ? `· Previous <strong>₹${fmt(row.previous)} due</strong> `
     : row.previous < 0 ? `· Previous <strong>₹${fmt(-row.previous)} credit</strong> ` : '';
-  calc.innerHTML = `${fmt(row.consumed)} units × ₹${row.rate} = <strong>₹${fmt(row.elecBill)}</strong>
+  calc.innerHTML = `${row.meters?.length > 1 ? row.meters.length + ' meters total' : fmt(row.consumed) + ' units × ₹' + row.rate} = <strong>₹${fmt(row.elecBill)}</strong>
     · Rent <strong>₹${fmt(row.rent)}</strong>
     ${previousText}
     <br>Total due <strong>₹${fmt(row.totalDue)}</strong> · Paid <strong>₹${fmt(row.paid)}</strong> → Closing ${closing}`;
@@ -2752,6 +2783,7 @@ function saveMonthEntries() {
       consumed: row.consumed,
       rate: row.rate,
       elecBill: row.elecBill,
+      meters: row.meters,
       lastOutstanding: row.previous,
       totalDue: row.totalDue,
       paid: row.paid,
@@ -2795,9 +2827,7 @@ function balanceCell(value) {
 
 function electricityCell(entry) {
   if (!entry) return '—';
-  const detail = entry.unitStart != null && entry.unitFinal != null
-    ? `<br><small style="color:#666;">${fmt(entry.consumed)} units × ₹${entry.rate}</small>`
-    : '';
+  const detail = `<br><small style="color:#666;white-space:pre-line">${escapeHtml(electricityDescription(entry))}</small>`;
   return money(entry.elecBill) + detail;
 }
 
@@ -3442,7 +3472,7 @@ function entryCells(entry) {
     xNum(entry.consumed, XS.cell), xNum(entry.rate, XS.cell), xNum(entry.elecBill),
     xNum(entry.lastOutstanding), xNum(entry.totalDue), xNum(entry.paid),
     xText(paymentSummary(entry)), xText(paymentModes(entry)), xNum(entry.outstanding),
-    xText(entryStatus(entry)), xText(entry.remarks || '')
+    xText(entryStatus(entry)), xText([entry.remarks, entry.meters?.length > 1 ? electricityDescription(entry) : ''].filter(Boolean).join(' | '))
   ];
 }
 
@@ -3790,14 +3820,15 @@ function undoLastChange() {
   toast('Reverted: ' + latest.label, 'success');
 }
 
-function exportData() {
+async function exportData() {
+  try {
   const now = new Date();
   const dateStr = now.getFullYear() + '-' +
     String(now.getMonth() + 1).padStart(2, '0') + '-' +
     String(now.getDate()).padStart(2, '0');
   const filename = 'JasmineResidency_Backup_' + dateStr + '.json';
 
-  const payload = JSON.stringify(DB, null, 2);
+  const payload = JSON.stringify(await backupWithAttachments(DB), null, 2);
   const blob = new Blob([payload], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
@@ -3809,6 +3840,7 @@ function exportData() {
 
   toast('Backup downloaded: ' + filename, 'success');
   renderBackupInfo();
+  } catch(error) {toast('Backup not created: '+error.message,'error');}
 }
 
 function importData(event) {
@@ -3820,7 +3852,7 @@ function importData(event) {
   statusEl.style.color = 'var(--gray)';
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const parsed = JSON.parse(e.target.result);
 
@@ -3843,6 +3875,7 @@ function importData(event) {
         return;
       }
 
+      await restoreAttachmentBackup(parsed);
       DB = parsed;
       saveData(DB, { label: 'Imported backup file' });
 
@@ -3942,19 +3975,22 @@ async function pushCloudData(expectedVersion, options = {}) {
     return false;
   }
   cloudSyncInProgress = true;
-  setCloudSyncState('syncing', 'Uploading the latest local copy…');
+  setCloudSyncState('syncing', 'Uploading files and the latest local copy…');
+  const uploadData = JSON.parse(JSON.stringify(DB));
   try {
+    await syncAttachmentFiles(uploadData);
     const response = await fetch(CLOUD_API, {
       method: 'PUT',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ data: DB, expectedVersion })
+      body: JSON.stringify({ data: uploadData, expectedVersion })
     });
     const result = await readCloudResponse(response);
-    writeCloudMeta({ version: Number(result.version) || 0, dirty: false, lastSyncAt: Date.now() });
+    writeCloudMeta({ version: Number(result.version) || 0, dirty: JSON.stringify(DB) !== JSON.stringify(uploadData), lastSyncAt: Date.now() });
     pendingOfflinePush = false;
     setCloudSyncState('connected', options.initial ? 'Initial local copy of all flats uploaded to Cloudflare D1.' : 'Saved all flats to Cloudflare D1 just now.');
     renderBackupInfo();
+    if(readCloudMeta().dirty) queueCloudSave();
     return true;
   } catch (error) {
     if (error && error.status === 409) {
@@ -4071,6 +4107,7 @@ window.addEventListener('offline', () => {
 });
 
 // Init
+document.getElementById('newDobInput').innerHTML = dobInput('nt_dob');
 renderHome();
 renderBackupInfo();
 initializePinGate();

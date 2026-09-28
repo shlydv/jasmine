@@ -107,7 +107,7 @@ async function verifyAccessToken(request, env) {
   return verified ? payload : null;
 }
 
-async function requireAccess(request, env) {
+export async function requireAccess(request, env) {
   if (!env.JASMINE_DB) {
     return { response: errorResponse('Cloud database is not bound yet. Add the JASMINE_DB D1 binding and run schema.sql.', 503) };
   }

@@ -4,11 +4,15 @@
 
 import { onRequestGet, onRequestPut } from './functions/api/data.js';
 
+import { handleFiles } from './functions/api/files.js';
+
 const API_PATH = '/api/data';
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/api/files' || url.pathname.startsWith('/api/files/')) return handleFiles(request, env);
 
     if (url.pathname === API_PATH || url.pathname === `${API_PATH}/`) {
       const context = {
