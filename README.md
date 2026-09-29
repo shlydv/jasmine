@@ -12,6 +12,10 @@ python3 -m http.server 8765
 
 Open http://localhost:8765. Local preview data is separate from the live website. The simple local server does not provide cloud sync.
 
+## Flats and checked-out tenants
+
+On **All Flats**, use **+ Add Flat** to create a vacant unit, then tap its card to add a renter. Flat names must be unique (ignoring case and surrounding spaces). The **Checked-out tenants** folder keeps previous renters, their documents and billing history separately. Checkout leaves the flat available for a new renter. An old renter cannot be reopened while the flat has another active renter. Vacant flat records are included in cloud sync and JSON backups.
+
 ## Tenant information
 
 Open a flat and select **Tenant Info**. Expand each section for owner details, personal information, permanent/local addresses, IDs, references, previous residence and employment. A third contact is optional, matching the supplied verification form. Existing tenant data stays intact; new fields start blank. Use **Save Changes** after edits or photo/signature uploads.

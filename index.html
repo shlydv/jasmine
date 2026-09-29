@@ -549,6 +549,16 @@
       style="padding:9px 14px; border:2px solid var(--border); border-radius:8px; font-size:15px; min-width:200px;"
       oninput="renderHome()">
   </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+    <button class="btn btn-primary" id="activeFlatsButton" onclick="setHomeFolder(false)">🏠 Current flats</button>
+    <button class="btn" id="checkedOutButton" onclick="setHomeFolder(true)">📁 Checked-out tenants</button>
+  </div>
+  <form id="addFlatForm" onsubmit="event.preventDefault();addFlat()" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;align-items:center;">
+    <label for="newFlatNumber">New flat number / name</label>
+    <input id="newFlatNumber" maxlength="80" required placeholder="e.g. 502 or Shop 4" style="padding:10px;max-width:100%;box-sizing:border-box;">
+    <button class="btn btn-success" type="submit">+ Add Flat</button>
+  </form>
+  <p id="homeFolderHint" class="hint"></p>
   <div class="home-grid" id="homeGrid"></div>
 </div>
 
@@ -1429,13 +1439,49 @@ function switchTab(name, button = null) {
 // ─────────────────────────────────────────────
 // HOME SCREEN
 // ─────────────────────────────────────────────
+let showingCheckedOut = false;
+function setHomeFolder(checkedOut) {
+  showingCheckedOut = checkedOut;
+  renderHome();
+}
+function flatKey(flat) {
+  return String(flat || '').trim().toLowerCase();
+}
+function portfolioFlats() {
+  return [...new Map([...(Array.isArray(DB.flats) ? DB.flats : []), ...DB.tenants.map(t => t.flat)]
+    .filter(f => typeof f === 'string' && f.trim()).map(f => [flatKey(f), f.trim()])).values()];
+}
+function homeRecords(archived) {
+  if (archived) return DB.tenants.map((t,i) => ({t,i})).filter(({t}) => t.checkedOut);
+  return portfolioFlats().map(flat => {
+    const i = DB.tenants.findIndex(t => flatKey(t.flat) === flatKey(flat) && !t.checkedOut);
+    return i >= 0 ? {t:DB.tenants[i],i} : {t:{flat,name:'Vacant',entries:[]},i:-1};
+  });
+}
+function addFlat() {
+  const input = document.getElementById('newFlatNumber');
+  const flat = input.value.trim();
+  if (!flat || flat.length > 80) { toast('Enter a flat number or name, up to 80 characters.', 'error'); return; }
+  if (portfolioFlats().some(f => flatKey(f) === flatKey(flat))) { toast('This flat already exists. Open its card to add a tenant.', 'error'); return; }
+  DB.flats = [...(Array.isArray(DB.flats) ? DB.flats : []), flat];
+  saveData(DB, {label:'Added Flat ' + flat});
+  input.value = '';
+  document.getElementById('searchBox').value = '';
+  setHomeFolder(false);
+  toast('Flat ' + flat + ' added. Tap it to add a tenant.', 'success');
+}
 function renderHome() {
   const q = (document.getElementById('searchBox').value || '').toLowerCase();
   const grid = document.getElementById('homeGrid');
   grid.innerHTML = '';
 
+  document.getElementById('checkedOutButton').textContent = '📁 Checked-out tenants (' + DB.tenants.filter(t => t.checkedOut).length + ')';
+  document.getElementById('checkedOutButton').className = 'btn' + (showingCheckedOut ? ' btn-primary' : '');
+  document.getElementById('activeFlatsButton').className = 'btn' + (!showingCheckedOut ? ' btn-primary' : '');
+  document.getElementById('addFlatForm').style.display = showingCheckedOut ? 'none' : 'flex';
+  document.getElementById('homeFolderHint').textContent = showingCheckedOut ? 'Previous tenants, documents and billing history are kept here. Tap a tenant to view their record.' : 'Tap an occupied flat to manage it, or a vacant flat to add a tenant.';
   const floors = {};
-  DB.tenants.forEach((t, i) => {
+  homeRecords(showingCheckedOut).forEach(({t, i}) => {
     if (q && !t.flat.toLowerCase().includes(q) && !t.name.toLowerCase().includes(q)) return;
     const floor = getFloor(t.flat);
     if (!floors[floor]) floors[floor] = [];
@@ -1448,7 +1494,7 @@ function renderHome() {
   });
 
   if (floorOrder.length === 0) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="es-icon">🔍</div>No flats found</div>';
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="es-icon">🔍</div>' + (showingCheckedOut ? 'No checked-out tenants found' : 'No flats found') + '</div>';
     return;
   }
 
@@ -1466,25 +1512,25 @@ function renderHome() {
 
       const card = document.createElement('div');
       card.className = 'flat-card' + (t.checkedOut ? ' checked-out' : '');
-      card.style.opacity = t.checkedOut ? '0.5' : '1';
+      card.style.opacity = '1';
       const checkoutLabel = t.checkedOut
         ? '<div style="font-size:11px;color:var(--red);margin-top:4px;">Checked Out' + (t.checkedOutAt ? ' · ' + fmtDate(t.checkedOutAt) : '') + '</div>'
         : '';
-      const newRenterButton = t.checkedOut
+      const newRenterButton = i === -1
         ? '<button type="button" class="new-renter-link" data-new-renter="true">+ New renter</button>'
         : '';
       card.innerHTML = `
-        <div class="flat-num">${t.flat}</div>
-        <div class="flat-name">${t.name}</div>
+        <div class="flat-num">${escapeHtml(t.flat)}</div>
+        <div class="flat-name">${escapeHtml(t.name)}</div>
         <div class="flat-due ${dueClass}">${dueText}</div>
         ${checkoutLabel}
         ${newRenterButton}
       `;
-      card.onclick = () => openTenant(i);
+      card.onclick = () => i === -1 ? startNewTenantForFlat([...DB.tenants].reverse().find(old => flatKey(old.flat) === flatKey(t.flat)) || t) : openTenant(i);
       const newRenter = card.querySelector('[data-new-renter]');
       if (newRenter) newRenter.onclick = event => {
         event.stopPropagation();
-        startNewTenantForFlat(t);
+        card.onclick();
       };
       grid.appendChild(card);
     });
@@ -1871,6 +1917,7 @@ function reopenTenant() {
     toast('This renter is already active.');
     return;
   }
+  if (DB.tenants.some(t => t !== tenant && !t.checkedOut && flatKey(t.flat) === flatKey(tenant.flat))) { toast('This flat already has an active tenant.', 'error'); return; }
   if (!confirm('Reopen ' + tenant.name + ' in Flat ' + tenant.flat + '? The checkout marker will be removed, but the billing history will remain.')) return;
   tenant.checkedOut = false;
   delete tenant.checkedOutAt;

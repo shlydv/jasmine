@@ -80,3 +80,11 @@ test('Aadhaar parsing preserves masked IDs and never invents DOB from year of bi
  assert.equal(run(`parseAadhaarText('DOB: 31/02/1985').dob`),undefined);
  assert.equal(run(`parseAadhaarText('1234 1234 1234').idNum`),undefined);
 });
+test('flat directory separates former renters and includes vacant units without duplicate cards',()=>{
+ const {run}=app();run(`DB={flats:['601',' 601 '],tenants:[{flat:'101',name:'Former',checkedOut:true},{flat:'101',name:'Current'},{flat:'102',name:'Former 2',checkedOut:true}]}`);
+ assert.equal(run('homeRecords(true).length'),2);
+ assert.equal(run('homeRecords(false).length'),3);
+ assert.equal(run("homeRecords(false).find(r=>r.t.flat==='101').t.name"),'Current');
+ assert.equal(run("homeRecords(false).find(r=>r.t.flat==='102').i"),-1);
+ assert.equal(run('DB.tenants.length'),3);
+});
