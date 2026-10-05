@@ -13,7 +13,7 @@ function app() {
   const inline=html.split('<script>')[1].split('</script>')[0];
   // Load top-level function declarations, without executing app startup or auth.
   const declarations=[...inline.matchAll(/^(?:async )?function \w+\([^]*?^\}/gm)].map(m=>m[0]).join('\n');
-  vm.runInContext(['tenant-details.js','verification.js','electricity.js','attachments.js'].map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n')+'\n'+declarations,context);
+  vm.runInContext(['tenant-details.js','verification.js','electricity.js','attachments.js','finance.js'].map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n')+'\n'+declarations,context);
   vm.runInContext(`var DB={tenants:[{flat:'TEST',name:'Synthetic Tenant',rent:8000,security:3000,startDate:'2026-05-07',dueDay:7,lastMeter:100,elecRate:9,entries:[]}]};var currentTenantIdx=0;var editingEntryId=null;var monthEntryDraft={}; toast=()=>{};saveData=()=>{};openTenant=()=>{};switchTab=()=>{};`,context);
   return {el,run:code=>vm.runInContext(code,context)};
 }
@@ -87,4 +87,16 @@ test('flat directory separates former renters and includes vacant units without 
  assert.equal(run("homeRecords(false).find(r=>r.t.flat==='101').t.name"),'Current');
  assert.equal(run("homeRecords(false).find(r=>r.t.flat==='102').i"),-1);
  assert.equal(run('DB.tenants.length'),3);
+});
+test('maintenance charges save, appear on bills, and carry into later balances and reports',()=>{
+ const {run,el}=app();Object.entries({month:'2026-10',rent:8000,unitStart:100,unitFinal:124,elecRate:9,paid:8000,paid2:0,payDate:'2026-10-15',payDate2:'',payMode:'Cash',payMode2:'',remarks:'',lastOutstanding:0,maintenance:500,rentFrom:'2026-10-15'}).forEach(([k,v])=>el('b_'+k).value=String(v));run('saveBillingEntry()');assert.equal(run('DB.tenants[0].entries[0].totalDue'),8716);assert.equal(run('DB.tenants[0].entries[0].outstanding'),716);assert.match(run('buildBillMessage(DB.tenants[0],DB.tenants[0].entries[0])'),/Maintenance\/Others Charges=500/);assert.equal(run('tenantStatementTotals(DB.tenants[0]).billed'),8716);assert.equal(run('getEntryIssues(DB.tenants[0],0).length'),0);
+});
+test('cash reports use receipt dates, keep unsplit money visible and count DHBVN once',()=>{
+ const {run}=app();run(`DB={tenants:[{flat:'101',name:'Former',checkedOut:true,entries:[{id:1,month:'2026-09',rent:8000,elecBill:216,maintenance:500,paid:8716,payments:[{amount:8216,date:'2026-10-04'},{amount:500,date:'2026-10-16'}],receiptSplits:{0:{rent:8000,electricity:216,other:0}}},{id:2,month:'2026-10',rent:100,elecBill:0,paid:100}]}],financeRecords:[{kind:'dhbvn',date:'2026-10-05',amount:150},{kind:'expense',date:'2026-10-06',amount:50},{kind:'dhbvn',date:'2026-09-30',amount:999}]}`);const t=plain(run("financeTotals('2026-10-01','2026-10-10')"));assert.equal(t.received,8216);assert.equal(t.rentReceived,8000);assert.equal(t.electricReceived,216);assert.equal(t.dhbvn,150);assert.equal(t.expenses,50);assert.equal(t.undated,100);assert.equal(t.rentBilled,100);assert.equal(t.receipts.length,1);assert.equal(run("financeTotals('2026-10-01','2026-10-31').unallocated"),500);assert.equal(run("validReceiptSplit({rent:8000,electricity:216,other:0},8000)"),false);
+});
+test('effective rent dates clamp short months; reference drafts include permanent address',()=>{const {run}=app();assert.equal(run("rentEffectiveDate({startDate:'2026-01-31'},'2026-02')"),'2026-02-28');assert.match(run("referenceMessage({name:'Test Resident',flat:'206',reference1Name:'Test Reference',address:'Test Address'},1)"),/Dear Test Reference/);assert.match(run("referenceMessage({name:'Test Resident',flat:'206',address:'Test Address'},1)"),/Test Address/);});
+test('bulk maintenance-only entries and receipt corrections recalculate safely',()=>{
+ const {run,el}=app();run(`monthEntryDraft={0:{maintenance:'250',paid:'0',rentFrom:'2026-10-07'}}`);assert.equal(run("computeMonthEntryRow(0,'2026-10').totalDue"),8250);run(`monthEntryDraft[0].maintenance='-1'`);assert.ok(run("computeMonthEntryRow(0,'2026-10').error"));
+ run(`DB.tenants[0].entries=[{id:1,month:'2026-10',rent:8000,elecBill:0,maintenance:250,unitStart:100,unitFinal:100,rate:9,paid:8000,payments:[{amount:8000,date:'2026-10-07',mode:'Cash'},{amount:0,date:'',mode:''}],receiptSplits:{0:{rent:8000,electricity:0,other:0}},lastOutstanding:0}];editingEntryId=1;`);
+ Object.entries({month:'2026-10',rent:8000,unitStart:100,unitFinal:100,rate:9,elecBill:0,maintenance:300,rentFrom:'2026-10-07',paid:8100,paid2:0,payDate:'2026-10-07',payDate2:'',payMode:'Cash',payMode2:'',remarks:'',lastOutstanding:0}).forEach(([k,v])=>el('e_'+k).value=String(v));run('saveEditedEntry()');assert.equal(run('DB.tenants[0].entries[0].totalDue'),8300);assert.equal(run('DB.tenants[0].entries[0].outstanding'),200);assert.equal(run('DB.tenants[0].entries[0].receiptSplits'),undefined);
 });

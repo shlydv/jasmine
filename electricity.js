@@ -39,6 +39,7 @@ function readMeterRows(prefix) {
 }
 function prepareBillingMeters() {
   const t=DB.tenants[currentTenantIdx],month=document.getElementById('b_month').value;
+  const rentFrom=document.getElementById('b_rentFrom');if(rentFrom)rentFrom.value=rentEffectiveDate(t,month);
   document.getElementById('b_extraMeters').innerHTML=meterRowsHtml('b',extraMeterDrafts(t,month),'calcBilling()');
   document.getElementById('b_unitStart').value=meterBeforeMonth(t,'main',month);
   document.getElementById('b_lastOutstanding').value=getBalanceBeforeMonth(t,month);

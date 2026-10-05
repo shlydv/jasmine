@@ -46,6 +46,20 @@ Files upload before their tenant references. Files are protected by the same Clo
 
 JSON exports include saved photos and documents, fetching cloud copies when needed. If a file is unavailable, export reports the error rather than producing an incomplete backup. Imports restore the embedded files and upload them on the next successful sync. Backups contain personal documents and should be kept privately.
 
+## Accounts / DHBVN and expenses
+
+Open **Accounts / DHBVN** from the home screen or navigation. Record each electricity payment with its date, bill month, meter name, particulars and amount; Meter 1, Meter 2 and Meter 3 / Solar are suggestions, and other meter names can be typed. Add any number of other expense entries with date, particulars, remarks and amount. Records can be edited or removed (device Undo is available). DHBVN payments are included once in total expenditure; do not duplicate them under Other expense.
+
+Choose **From** and **To** for a custom statement, printable PDF or CSV for Excel. Cash collection uses the actual dates of the two payment installments, including former tenants. Payments without dates are shown separately and excluded. Billing summaries include whole bill months overlapping the chosen dates, without daily proration. The cash balance is total resident receipts minus DHBVN payments and other expenditure; it is an operating cash summary, not formal accounting profit.
+
+Use **Split received payments** to classify each receipt into rent, electricity and other/advance amounts. These must add up to the existing receipt and do not add another payment or change the tenant balance. Old receipts remain unsplit until reviewed. Electricity variance is withheld while selected receipts remain unsplit. Editing a receipt’s payment details clears its split so it can be reviewed again. All accounts records and splits travel with normal cloud sync, backups and Undo.
+
+## Maintenance, rent dates and reference messages
+
+Add Bill, History → Edit and Month Entry accept **Maintenance / other charges**. These feed into totals, balances, bills, receipts and exports. **Rent effective from** is an editable date on each bill, initially based on the tenancy start day (clamped for shorter months). It is explanatory; rent is not automatically prorated. Enter the agreed amount for a partial month. Existing bills without maintenance keep their original amounts.
+
+In **Tenant Info → Reference verification message**, choose the reference and prepare the editable draft using the resident’s name, flat and permanent address. Review and copy it to send manually; the app does not send messages automatically.
+
 ## Tests
 
 ```sh
