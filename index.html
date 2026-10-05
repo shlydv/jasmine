@@ -500,6 +500,7 @@
   .tenant-section summary { cursor:pointer; font-weight:700; color:var(--blue); margin-bottom:12px; }
   .tenant-section .form-group { min-width:220px; flex:1 1 260px; }
   .tenant-section textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; font:inherit; }
+  .payment-records{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:12px;margin-bottom:24px}.payment-record{border:1px solid var(--border);border-radius:8px;padding:16px;background:white}.record-heading{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.payment-record p{color:var(--gray);margin:8px 0 12px}.summary-choices{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 24px}.summary-choices .btn{font-size:16px;padding:12px 18px} #ownerSummarySection>.card>.rep-table td:last-child{white-space:nowrap;width:100px} #ownerSummarySection .table-wrap .rep-table{min-width:620px}
   #screen-finance .rep-table td,#screen-finance .rep-table th{white-space:normal;overflow-wrap:normal} #financeResults>.rep-table td:last-child{white-space:nowrap;width:100px} #screen-finance .table-wrap .rep-table{min-width:620px} #screen-finance .rep-doc{font-size:15px} #screen-finance .rep-table{font-size:14px} #screen-finance h3{margin:18px 0 8px} #financeForm input,#financeForm select{max-width:100%;box-sizing:border-box} #screen-finance .form-group{min-width:180px;flex:1 1 200px}
   .extra-meter{border:1px solid #cdd9e5;border-radius:8px;padding:12px;margin:12px 0}.extra-meter legend{font-weight:700;color:var(--blue)}
   .document-row{border-bottom:1px solid #ddd;padding:12px 0;overflow-wrap:anywhere}#ocrReview{margin:12px 0}#ocrReview input[type=checkbox]{width:auto;margin-right:6px}
@@ -531,13 +532,13 @@
 </header>
 
 <nav>
-  <button class="nav-btn active" onclick="showScreen('home')">🏠 All Flats</button>
-  <button class="nav-btn" onclick="showScreen('monthEntry')">📝 Month Entry</button>
-  <button class="nav-btn" onclick="showScreen('summary')">📊 Summary</button>
-  <button class="nav-btn" onclick="showScreen('reports')">📄 Reports</button>
-  <button class="nav-btn" onclick="showScreen('addTenant')">➕ Add Tenant</button>
-  <button class="nav-btn" onclick="showScreen('backup')">💾 Backup</button>
-  <button class="nav-btn" onclick="openFinance()">💰 Accounts / DHBVN</button>
+  <button class="nav-btn active" onclick="showScreen('home')">All Flats</button>
+  <button class="nav-btn" onclick="showScreen('monthEntry')">Monthly Billing</button>
+  <button class="nav-btn" onclick="showScreen('summary')">Summary</button>
+  <button class="nav-btn" onclick="openFinance()">Expenses &amp; DHBVN</button>
+  <button class="nav-btn" onclick="showScreen('reports')">Tenant Documents</button>
+  <button class="nav-btn" onclick="showScreen('addTenant')">Add Tenant</button>
+  <button class="nav-btn" onclick="showScreen('backup')">Backup</button>
 </nav>
 
 <!-- HOME SCREEN -->
@@ -553,7 +554,7 @@
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
     <button class="btn btn-primary" id="activeFlatsButton" onclick="setHomeFolder(false)">🏠 Current flats</button>
-    <button class="btn btn-success" onclick="openFinance()">💰 Accounts / DHBVN</button>
+    <button class="btn btn-success" onclick="openFinance()">Expenses &amp; DHBVN</button>
     <button class="btn" id="checkedOutButton" onclick="setHomeFolder(true)">📁 Checked-out tenants</button>
   </div>
   <form id="addFlatForm" onsubmit="event.preventDefault();addFlat()" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;align-items:center;">
@@ -606,20 +607,30 @@
 
 <!-- SUMMARY SCREEN -->
 <div id="screen-summary" class="screen">
+  <h2>Summary</h2>
+  <div class="summary-choices" role="group" aria-label="Summary type">
+    <button id="tenantSummaryButton" class="btn btn-primary" onclick="setSummaryView('tenant')">Tenant Rent &amp; Bills</button>
+    <button id="ownerSummaryButton" class="btn" onclick="setSummaryView('owner')">Owner Income &amp; Expenses</button>
+  </div>
+  <section id="tenantSummarySection">
   <div class="summary-toolbar">
     <div>
-      <div class="section-title" style="margin:0;">Monthly Overview</div>
-      <div style="font-size:13px;color:var(--gray);margin-top:4px;">Billing, collections, balances and reminders in one place</div>
+      <div class="section-title" style="margin:0;">Tenant Rent &amp; Bills</div>
+      <div style="font-size:13px;color:var(--gray);margin-top:4px;">Rent, electricity, payments and balances for each tenant.</div>
     </div>
     <div style="display:flex; align-items:end; gap:12px; flex-wrap:wrap;">
-      <label style="font-size:13px;font-weight:700;color:var(--gray);">Month<br><input type="month" id="summaryMonth" onchange="renderSummary()"></label>
+      <label>Period<br><select id="tenantSummaryPeriod" onchange="changeTenantSummaryPeriod()"><option value="month">One month</option><option value="range">Custom period</option><option value="year">Financial year</option><option value="ledger">All billing records</option></select></label>
+      <label id="tenantMonthPicker" style="font-size:13px;font-weight:700;color:var(--gray);">Month<br><input type="month" id="summaryMonth" onchange="renderSummary()"></label>
+      <div id="tenantRangePicker" style="display:none"><label>From <input type="date" id="tenantSummaryFrom" onchange="renderTenantPeriod()"></label> <label>To <input type="date" id="tenantSummaryTo" onchange="renderTenantPeriod()"></label></div>
+      <label id="tenantYearPicker" style="display:none">Financial year<br><select id="tenantSummaryYear" onchange="renderTenantPeriod()"></select></label>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm" type="button" onclick="printMonthFromSummary()">🖨 Print / PDF</button>
-        <button class="btn btn-success btn-sm" type="button" onclick="downloadMonthFromSummary()">⬇ Excel</button>
+        <button class="btn btn-primary btn-sm" type="button" onclick="printTenantSummary()">🖨 Print / PDF</button>
+        <button class="btn btn-success btn-sm" type="button" onclick="downloadTenantSummary()">⬇ Excel</button>
       </div>
     </div>
   </div>
-  <button class="btn btn-primary" style="margin-bottom:12px" onclick="openFinance()">Custom date range · Income, expenses &amp; electricity</button>
+  <div id="tenantPeriodResults" class="card rep-doc" style="display:none"></div>
+  <div id="summaryMonthlyDetails">
   <div class="summary-grid" id="summaryGrid"></div>
   <div class="section-title">Monthly Status</div>
   <div class="card">
@@ -642,40 +653,41 @@
       </table>
     </div>
   </div>
+  </div></section>
+  <section id="ownerSummarySection" style="display:none">
+    <div class="summary-toolbar"><div><div class="section-title">Owner Income &amp; Expenses</div><p>Money received, expenses paid and the balance for Jasmine Residency.</p></div></div>
+    <div class="card"><div class="form-row"><div class="form-group"><label>From</label><input id="finFrom" type="date" onchange="renderOwnerSummary()"></div><div class="form-group"><label>To</label><input id="finTo" type="date" onchange="renderOwnerSummary()"></div></div><button class="btn btn-primary" onclick="printFinance()">Print owner summary / PDF</button> <button class="btn btn-success" onclick="downloadFinance()">Download owner summary / CSV</button></div>
+    <div class="card rep-doc" id="financeResults"></div>
+    <details class="card"><summary><strong>Receipt breakdown: rent, electricity and other</strong></summary><p>Use this to complete the rent and electricity collection totals shown above.</p><div id="receiptSplitEditor"></div><div id="financeReceipts"></div></details>
+  </section>
 </div>
 
 <div id="screen-finance" class="screen">
- <h2>Accounts / DHBVN</h2>
- <div class="card"><h3>Choose statement dates</h3><div class="form-row"><div class="form-group"><label>From</label><input id="finFrom" type="date" onchange="renderFinance()"></div><div class="form-group"><label>To</label><input id="finTo" type="date" onchange="renderFinance()"></div></div><button class="btn btn-primary" onclick="printFinance()">Print / Save PDF</button> <button class="btn btn-success" onclick="downloadFinance()">Download CSV for Excel</button></div>
- <div class="card" id="financeForm"><h3>Add expense / DHBVN payment</h3><p>DHBVN payments are included automatically in total expenditure. Do not enter the same bill again as another expense.</p><input id="finEditId" type="hidden"><div class="form-row">
+ <h2>Expenses &amp; DHBVN</h2>
+ <p>Record expenses and electricity payments here. View income, expenditure and balances on <button class="btn btn-sm" onclick="showScreen('summary');setSummaryView('owner')">Summary → Owner Income &amp; Expenses</button>.</p>
+ <div class="card" id="financeForm"><h3>Add an expense or electricity payment</h3><p>DHBVN payments are included automatically in total expenditure. Do not enter the same bill again as another expense.</p><input id="finEditId" type="hidden"><div class="form-row">
  <div class="form-group"><label>Type</label><select id="finKind" onchange="financeKindChanged()"><option value="dhbvn">DHBVN electricity payment</option><option value="expense">Other expense</option></select></div>
- <div class="form-group"><label>Date paid</label><input id="finDate" type="date"></div><div class="form-group"><label>Bill month (optional)</label><input id="finBillMonth" type="month"></div>
+ <div class="form-group"><label>Date paid</label><input id="finDate" type="date"></div><div class="form-group" id="finBillMonthWrap"><label>Bill month (optional)</label><input id="finBillMonth" type="month"></div>
  <div class="form-group" id="finMeterWrap"><label>Meter</label><input id="finMeter" list="dhbvnMeters" value="Meter 1"><datalist id="dhbvnMeters"><option value="Meter 1"><option value="Meter 2"><option value="Meter 3 / Solar"></datalist></div>
- <div class="form-group"><label>Expense particulars</label><input id="finParticulars" maxlength="200" placeholder="e.g. Electricity bill / Plumbing repair"></div><div class="form-group"><label>Amount paid (₹)</label><input id="finAmount" type="number" min="0" step="0.01"></div><div class="form-group"><label>Remarks</label><input id="finRemarks" maxlength="500"></div></div>
+ <div class="form-group"><label>Description</label><input id="finParticulars" maxlength="200" placeholder="e.g. Electricity bill / Plumbing repair"></div><div class="form-group"><label>Amount paid (₹)</label><input id="finAmount" type="number" min="0" step="0.01"></div><div class="form-group"><label>Remarks</label><input id="finRemarks" maxlength="500"></div></div>
  <button id="finSave" class="btn btn-primary" onclick="saveFinanceRecord()">Save expense / payment</button> <button class="btn" onclick="resetFinanceForm()">Clear</button></div>
- <details class="card"><summary><strong>Split received payments into rent / electricity / other</strong></summary><p>Older receipts combine all charges. Split them here for accurate rent and electricity collection totals. This does not add a second payment or change the tenant’s balance.</p><div id="receiptSplitEditor"></div><div id="financeReceipts"></div></details>
- <div class="card rep-doc" id="financeResults"></div>
+ <div class="card"><h3>Saved expenses &amp; electricity payments</h3><label>Month <input type="month" id="expenseMonth" onchange="renderFinance()"></label><div id="expenseRecords"></div></div>
 </div>
 
 <!-- REPORTS SCREEN -->
 <div id="screen-reports" class="screen">
-  <div class="section-title" style="margin-top:20px;">📄 Reports &amp; Downloads</div>
-  <p class="rep-intro">
-    Pick a report below, then <strong>Print</strong> it or download it as an <strong>Excel file</strong>
-    that opens in Google Sheets or Excel on the phone. On the phone, choose <strong>Save as PDF</strong>
-    in the print screen to keep or share a PDF copy.
-  </p>
+  <div class="section-title" style="margin-top:20px;">Tenant Documents</div>
+  <p class="rep-intro">Payment records and receipts to print or share with a tenant. For all-flat rental summaries and owner finances, use Summary.</p>
 
   <div class="card">
-    <button class="btn" style="margin-bottom:12px" onclick="openFinance()">Custom date range statement</button>
     <div class="rep-picker">
       <label>Report
         <select id="reportType" onchange="onReportTypeChange()">
-          <option value="month">All rooms — one month</option>
-          <option value="tenant">One room — full payment record</option>
-          <option value="receipt">Rent receipt — one room, one month</option>
-          <option value="year">Year at a glance — all rooms, all months</option>
-          <option value="ledger">All rooms — full record (every month)</option>
+
+          <option value="tenant">Tenant payment record</option>
+          <option value="receipt">Tenant payment receipt — one month</option>
+
+
         </select>
       </label>
       <label id="reportMonthWrap">Month
@@ -856,7 +868,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('billing')">💰 Add Bill / Payment</button>
     <button class="tab-btn" onclick="switchTab('history')">📋 History</button>
-    <button class="tab-btn" onclick="switchTab('send')">📲 Send Bill</button>
+    <button class="tab-btn" onclick="switchTab('send')">Messages</button>
     <button class="tab-btn" onclick="switchTab('info')">👤 Tenant Info</button>
     <button class="tab-btn" onclick="switchTab('meters')">⚡ Electricity meters</button>
   </div>
@@ -996,7 +1008,7 @@
   <!-- SEND BILL TAB -->
   <div class="tab-panel" id="tab-send">
     <div class="card">
-      <h3>📲 Send Bill via WhatsApp</h3>
+      <h3>Tenant Messages</h3><p>Prepare a bill, receipt or reference verification message.</p><button class="btn btn-primary" style="margin-bottom:16px" onclick="openReferenceMessages()">Reference verification message</button>
       <div id="sendBillContent"></div>
     </div>
   </div>
@@ -1072,11 +1084,11 @@
 <div id="printArea" class="rep-doc"></div>
 
 <script src="./history_data.js"></script>
-<script src="./tenant-details.js?v=3"></script>
+<script src="./tenant-details.js?v=4"></script>
 <script src="./verification.js?v=2"></script>
 <script src="./electricity.js?v=3"></script>
 <script src="./attachments.js?v=2"></script>
-<script src="./finance.js?v=1"></script>
+<script src="./finance.js?v=2"></script>
 <script>
 // ─────────────────────────────────────────────
 // DATA LAYER — localStorage
@@ -1430,12 +1442,12 @@ function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const map = { home: 0, monthEntry: 1, summary: 2, reports: 3, addTenant: 4, backup: 5, finance: 6 };
+  const map = { home: 0, monthEntry: 1, summary: 2, finance: 3, reports: 4, addTenant: 5, backup: 6 };
   if (map[name] !== undefined) document.querySelectorAll('.nav-btn')[map[name]].classList.add('active');
   if (name === 'home') renderHome();
   if (name === 'monthEntry') renderMonthEntry();
-  if (name === 'summary') renderSummary();
-  if (name === 'reports') renderReport();
+  if (name === 'summary') {renderSummary();if(summaryView==='owner')renderOwnerSummary();}
+  if (name === 'reports') onReportTypeChange();
   if (name === 'backup') renderBackupInfo();
 }
 
@@ -2275,11 +2287,11 @@ function addTenant() {
 // SUMMARY
 // ─────────────────────────────────────────────
 function renderSummary() {
-  const active = DB.tenants.filter(t => !t.checkedOut);
+  if(document.getElementById('tenantSummaryPeriod').value!=='month'){renderTenantPeriod();return;}
   const monthInput = document.getElementById('summaryMonth');
   if (!monthInput.value) monthInput.value = currentMonthString();
   const month = monthInput.value;
-  const rows = active.map((tenant, tenantIndex) => ({ tenant, tenantIndex: DB.tenants.indexOf(tenant), entry: getMonthEntry(tenant, month) }));
+  const rows = getMonthReportRows(month);
   const entered = rows.filter(row => row.entry);
   const totalRent = entered.reduce((sum, row) => sum + Number(row.entry.rent || 0), 0);
   const totalElectricity = entered.reduce((sum, row) => sum + Number(row.entry.elecBill || 0), 0);
@@ -2290,11 +2302,11 @@ function renderSummary() {
   const reminders = getReminderCandidates(new Date());
 
   document.getElementById('summaryGrid').innerHTML = `
-    <div class="summary-card"><div class="sc-label">Entries Added</div><div class="sc-val">${entered.length}/${active.length}</div></div>
+    <div class="summary-card"><div class="sc-label">Entries Added</div><div class="sc-val">${entered.length}/${rows.length}</div></div>
     <div class="summary-card"><div class="sc-label">Maintenance / Other Billed</div><div class="sc-val">₹${fmt(entered.reduce((sum,r)=>sum+chargeExtras(r.entry),0))}</div></div>
     <div class="summary-card"><div class="sc-label">Rent Billed</div><div class="sc-val">₹${fmt(totalRent)}</div></div>
     <div class="summary-card"><div class="sc-label">Electricity Billed</div><div class="sc-val">₹${fmt(totalElectricity)}</div></div>
-    <div class="summary-card"><div class="sc-label">Payments Received</div><div class="sc-val" style="color:var(--green)">₹${fmt(totalPaid)}</div></div>
+    <div class="summary-card"><div class="sc-label">Paid Against These Bills</div><div class="sc-val" style="color:var(--green)">₹${fmt(totalPaid)}</div></div>
     <div class="summary-card"><div class="sc-label">Closing Dues</div><div class="sc-val" style="color:var(--red)">₹${fmt(totalOutstanding)}</div></div>
     <div class="summary-card"><div class="sc-label">Tenant Credits</div><div class="sc-val" style="color:var(--blue)">₹${fmt(totalCredits)}</div></div>
     <div class="summary-card"><div class="sc-label">Reminders Due Today</div><div class="sc-val" style="color:var(--orange)">${reminders.length}</div></div>
