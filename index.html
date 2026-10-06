@@ -658,7 +658,7 @@
     <div class="summary-toolbar"><div><div class="section-title">Owner Income &amp; Expenses</div><p>Money received, expenses paid and the balance for Jasmine Residency.</p></div></div>
     <div class="card"><div class="form-row"><div class="form-group"><label>From</label><input id="finFrom" type="date" onchange="renderOwnerSummary()"></div><div class="form-group"><label>To</label><input id="finTo" type="date" onchange="renderOwnerSummary()"></div></div><button class="btn btn-primary" onclick="printFinance()">Print owner summary / PDF</button> <button class="btn btn-success" onclick="downloadFinance()">Download owner summary / CSV</button></div>
     <div class="card rep-doc" id="financeResults"></div>
-    <details class="card"><summary><strong>Receipt breakdown: rent, electricity and other</strong></summary><p>Use this to complete the rent and electricity collection totals shown above.</p><div id="receiptSplitEditor"></div><div id="financeReceipts"></div></details>
+    <details class="card"><summary><strong>Payment breakdown</strong></summary><p>Calculated automatically from each bill and its payments.</p><div id="financeReceipts"></div></details>
   </section>
 </div>
 
@@ -1084,11 +1084,11 @@
 <div id="printArea" class="rep-doc"></div>
 
 <script src="./history_data.js"></script>
-<script src="./tenant-details.js?v=4"></script>
+<script src="./tenant-details.js?v=5"></script>
 <script src="./verification.js?v=2"></script>
 <script src="./electricity.js?v=3"></script>
 <script src="./attachments.js?v=2"></script>
-<script src="./finance.js?v=2"></script>
+<script src="./finance.js?v=3"></script>
 <script>
 // ─────────────────────────────────────────────
 // DATA LAYER — localStorage
@@ -2101,7 +2101,6 @@ For the month of: ${fmtMonth(entry.month)}
 
 Rent: ₹${fmt(entry.rent)}
 Maintenance / other charges: ₹${fmt(chargeExtras(entry))}
-${entry.rentFrom ? "Rent w.e.f. "+fmtDate(entry.rentFrom) : ""}
 ${receiptElectricityLine(entry)}
 ${entry.meters?.length > 1 ? electricityDescription(entry) : ''}
 ${previousLine}Total due: ₹${fmt(entry.totalDue)}
@@ -2139,7 +2138,7 @@ function buildReceiptDoc(tenantIndex, month) {
     </div>
     <table class="rep-table" style="max-width:520px;">
       <tbody>
-        ${row('Rent'+(entry.rentFrom?' (w.e.f. '+fmtDate(entry.rentFrom)+')':''), money(entry.rent))}
+        ${row('Rent', money(entry.rent))}
         ${row('Maintenance / other charges',money(chargeExtras(entry)))}
         ${row('Electricity' + (entry.unitStart != null && entry.unitFinal != null
           ? ` <small style="color:#666;">(${escapeHtml(electricityDescription(entry))})</small>` : ''), money(entry.elecBill))}
@@ -2171,7 +2170,7 @@ function buildBillMessage(t, entry) {
     : 'Meter reading not recorded';
 
   return `${electricityHeader}${entry.rentFrom ? ' (Rent w.e.f. '+fmtDate(entry.rentFrom)+')' : ''}
-${t.startDate ? 'Tenancy start date='+fmtDate(t.startDate)+'\n' : ''}Name- ${t.name}
+Name- ${t.name}
 Flat No =${t.flat}
 Rent Month=${fmtMonth(entry.month)}
 Last Outstanding=${outstandingText}

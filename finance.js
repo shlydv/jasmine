@@ -12,18 +12,45 @@ function billExtraFields(prefix,entry={},tenant={},month='') {
 }
 function validFinanceDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value||'') && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value; }
 function financeRecords() { return Array.isArray(DB.financeRecords)?DB.financeRecords:[]; }
+// Recalculate from recorded bills and payments, including historical receipts.
+// Allocate electricity first, then rent due, maintenance, and finally rent advance.
 function financeReceipts() {
-  const rows=[];DB.tenants.forEach((t,ti)=>(t.entries||[]).forEach(e=>entryPayments(e).forEach((p,pi)=>{if(Number(p.amount)>0)rows.push({t,ti,e,pi,...p,split:e.receiptSplits?.[pi]});})));return rows;
+  const rows=[];
+  const cents=value=>Math.max(0,Math.round((Number(value)||0)*100));
+  DB.tenants.forEach((t,ti)=>{
+    let electricityCarry=0,otherCarry=0;
+    [...(t.entries||[])].sort((a,b)=>String(a.month).localeCompare(String(b.month))).forEach(e=>{
+      const previous=Number(e.lastOutstanding)||0;
+      const arrears=cents(previous);
+      electricityCarry=Math.min(electricityCarry,arrears);
+      otherCarry=Math.min(otherCarry,Math.max(0,arrears-electricityCarry));
+      let electricityDue=cents(e.elecBill)+electricityCarry;
+      let otherDue=cents(chargeExtras(e))+otherCarry;
+      let rentDue=Math.max(0,cents(e.rent)+arrears-electricityCarry-otherCarry-cents(-previous));
+      const payments=entryPayments(e).map((p,pi)=>({...p,pi}));
+      payments.sort((a,b)=>validFinanceDate(a.date)&&validFinanceDate(b.date)?a.date.localeCompare(b.date)||a.pi-b.pi:a.pi-b.pi);
+      payments.forEach(p=>{
+        let remaining=cents(p.amount);if(!remaining)return;
+        const electricity=Math.min(remaining,electricityDue);electricityDue-=electricity;remaining-=electricity;
+        const rent=Math.min(remaining,rentDue);rentDue-=rent;remaining-=rent;
+        const other=Math.min(remaining,otherDue);otherDue-=other;remaining-=other;
+        rows.push({t,ti,e,...p,split:{electricity:electricity/100,rent:(rent+remaining)/100,other:other/100},rentAdvance:remaining/100});
+      });
+      electricityCarry=electricityDue;otherCarry=otherDue;
+    });
+  });
+  return rows;
 }
 function validReceiptSplit(split,amount) {return split && ['rent','electricity','other'].every(k=>Number.isFinite(Number(split[k]))&&Number(split[k])>=0) && Math.abs(Number(split.rent)+Number(split.electricity)+Number(split.other)-Number(amount))<0.01;}
 function financeTotals(from,to) {
   const inside=date=>validFinanceDate(date)&&date>=from&&date<=to;
-  const receipts=financeReceipts().filter(p=>inside(p.date));
+  const allReceipts=financeReceipts();
+  const receipts=allReceipts.filter(p=>inside(p.date));
   const records=financeRecords().filter(r=>inside(r.date));
   const bills=[];DB.tenants.forEach(t=>(t.entries||[]).forEach(e=>{if(e.month>=from.slice(0,7)&&e.month<=to.slice(0,7))bills.push({t,e});}));
   const sum=(rows,fn)=>roundMoney(rows.reduce((s,r)=>s+Number(fn(r)||0),0));
   const allocated=receipts.filter(p=>validReceiptSplit(p.split,p.amount));
-  return {receipts,records,bills,received:sum(receipts,p=>p.amount),rentReceived:sum(allocated,p=>p.split.rent),electricReceived:sum(allocated,p=>p.split.electricity),otherReceived:sum(allocated,p=>p.split.other),unallocated:sum(receipts.filter(p=>!validReceiptSplit(p.split,p.amount)),p=>p.amount),undated:sum(financeReceipts().filter(p=>!validFinanceDate(p.date)),p=>p.amount),rentBilled:sum(bills,r=>r.e.rent),electricBilled:sum(bills,r=>r.e.elecBill),otherBilled:sum(bills,r=>chargeExtras(r.e)),dhbvn:sum(records.filter(r=>r.kind==='dhbvn'),r=>r.amount),expenses:sum(records.filter(r=>r.kind==='expense'),r=>r.amount)};
+  return {receipts,records,bills,received:sum(receipts,p=>p.amount),rentReceived:sum(allocated,p=>p.split.rent),electricReceived:sum(allocated,p=>p.split.electricity),otherReceived:sum(allocated,p=>p.split.other),unallocated:sum(receipts.filter(p=>!validReceiptSplit(p.split,p.amount)),p=>p.amount),undated:sum(allReceipts.filter(p=>!validFinanceDate(p.date)),p=>p.amount),rentBilled:sum(bills,r=>r.e.rent),electricBilled:sum(bills,r=>r.e.elecBill),otherBilled:sum(bills,r=>chargeExtras(r.e)),dhbvn:sum(records.filter(r=>r.kind==='dhbvn'),r=>r.amount),expenses:sum(records.filter(r=>r.kind==='expense'),r=>r.amount)};
 }
 function openFinance() {
   showScreen('finance');
@@ -48,8 +75,8 @@ function editFinanceRecord(id) {const r=financeRecords().find(r=>r.id===id);if(!
 function removeFinanceRecord(id) {if(!confirm('Remove this expense/payment? You can restore it using Undo in Backup.'))return;DB.financeRecords=financeRecords().filter(r=>r.id!==id);saveData(DB,{label:'Removed expense/payment'});renderFinance();}
 function financeStatement(s,from,to) {
   const row=(label,value)=>`<tr><td class="tl">${label}</td><td>${financeMoney(value)}</td></tr>`;
-  return reportHead('Owner Income & Expense Summary',fmtDate(from)+' to '+fmtDate(to))+`<h3>Income and expenses</h3><table class="rep-table"><tbody>${row('Rent received',s.rentReceived)}${row('Electricity received',s.electricReceived)}${row('Other / advance received',s.otherReceived)}${row('Receipts not yet split',s.unallocated)}${row('<strong>Total money received from residents</strong>',s.received)}${row('DHBVN payments',s.dhbvn)}${row('Other expenditure',s.expenses)}${row('<strong>Total Expenditure</strong>',s.dhbvn+s.expenses)}${row('<strong>Balance After Expenses (cash surplus / deficit)</strong>',s.received-s.dhbvn-s.expenses)}</tbody></table>
-  <h3>Electricity collections vs DHBVN</h3><table class="rep-table"><tbody>${row('Electricity collected from residents',s.electricReceived)}${row('Total Electricity Bill Paid to DHBVN',s.dhbvn)}${(s.unallocated?'<tr><td>Net Difference / Billing Variance</td><td>Pending receipt splits</td></tr>':row('Net Difference / Billing Variance (collections less DHBVN)',s.electricReceived-s.dhbvn))}</tbody></table><p class="rep-note">${s.unallocated?'Collection breakdown and electricity variance are incomplete until receipts are split. ':''}Cash totals use receipt/payment dates. DHBVN payments are counted once, separately from other expenses. Security deposits are not income. Undated receipts excluded from cash totals: ${financeMoney(s.undated)}.</p>
+  return reportHead('Owner Income & Expense Summary',fmtDate(from)+' to '+fmtDate(to))+`<h3>Income and expenses</h3><table class="rep-table"><tbody>${row('Rent received (including rent advances)',s.rentReceived)}${row('Electricity received',s.electricReceived)}${row('Maintenance / other received',s.otherReceived)}${row('<strong>Total money received from residents</strong>',s.received)}${row('DHBVN payments',s.dhbvn)}${row('Other expenditure',s.expenses)}${row('<strong>Total Expenditure</strong>',s.dhbvn+s.expenses)}${row('<strong>Balance After Expenses (cash surplus / deficit)</strong>',s.received-s.dhbvn-s.expenses)}</tbody></table>
+  <h3>Electricity collections vs DHBVN</h3><table class="rep-table"><tbody>${row('Electricity collected from residents',s.electricReceived)}${row('Total Electricity Bill Paid to DHBVN',s.dhbvn)}${row('Net Difference / Billing Variance (collections less DHBVN)',s.electricReceived-s.dhbvn)}</tbody></table><p class="rep-note">Payments cover electricity first, then rent due and maintenance. Excess payments count as rent advances. Cash totals use receipt/payment dates. DHBVN payments are counted once, separately from other expenses. Security deposits are not income. Undated receipts excluded from cash totals: ${financeMoney(s.undated)}.</p>
 `;
 }
 function financeTable(headers,rows) {return `<div class="table-wrap"><table class="rep-table"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')||`<tr><td colspan="${headers.length}">No records for this period.</td></tr>`}</tbody></table></div>`;}
@@ -75,15 +102,12 @@ function renderOwnerSummary() {
   try {
     const {from,to}=financeRange(),s=financeTotals(from,to);
     document.getElementById('financeResults').innerHTML=financeStatement(s,from,to);
-    document.getElementById('financeReceipts').innerHTML='<div class="payment-records">'+s.receipts.map(p=>`<article class="payment-record"><div class="record-heading"><strong>Flat ${escapeHtml(p.t.flat)} · ${escapeHtml(p.t.name)}</strong><strong>${financeMoney(p.amount)}</strong></div><p>${fmtDate(p.date)} · ${validReceiptSplit(p.split,p.amount)?'Breakdown complete':'Needs breakdown'}</p><button class="btn btn-sm" data-id="${escapeAttr(String(p.e.id))}" onclick="openReceiptSplit(${p.ti},this.dataset.id,${p.pi})">Edit breakdown</button></article>`).join('')+'</div>';
+    document.getElementById('financeReceipts').innerHTML='<div class="payment-records">'+s.receipts.map(p=>`<article class="payment-record"><div class="record-heading"><strong>Flat ${escapeHtml(p.t.flat)} · ${escapeHtml(p.t.name)}</strong><strong>${financeMoney(p.amount)}</strong></div><p>${fmtDate(p.date)} · Bill: ${escapeHtml(fmtMonth(p.e.month))}</p><p>Electricity: <strong>${financeMoney(p.split.electricity)}</strong><br>Rent: <strong>${financeMoney(p.split.rent)}</strong>${p.rentAdvance?` (includes ${financeMoney(p.rentAdvance)} rent advance)`:''}<br>Maintenance / other: <strong>${financeMoney(p.split.other)}</strong></p></article>`).join('')+'</div>';
     if(!s.receipts.length)document.getElementById('financeReceipts').innerHTML='<p class="hint">No dated receipts in this period.</p>';
   } catch(error) {document.getElementById('financeResults').textContent=error.message;document.getElementById('financeReceipts').innerHTML='';}
 }
-let receiptSplitTarget;
-function openReceiptSplit(ti,id,pi) {const t=DB.tenants[ti],e=t?.entries.find(e=>String(e.id)===id);if(!e)return;const p=entryPayments(e)[pi],split=validReceiptSplit(e.receiptSplits?.[pi],p.amount)?e.receiptSplits[pi]:{};receiptSplitTarget={t,e,pi,amount:p.amount};document.getElementById('receiptSplitEditor').innerHTML=`<div class="card"><h3>Split ${financeMoney(p.amount)} — Flat ${escapeHtml(t.flat)}</h3><p>Enter the actual rent and electricity portion. Put maintenance, advances or other amounts under Other. Total must equal the receipt.</p><div class="form-row">${['rent','electricity','other'].map(k=>`<div class="form-group"><label>${k==='rent'?'Rent':k==='electricity'?'Electricity':'Other / advance'} (₹)</label><input id="split_${k}" type="number" min="0" step="0.01" value="${Number(split[k])||0}"></div>`).join('')}</div><button class="btn btn-primary" onclick="saveReceiptSplit()">Save split</button> <button class="btn" onclick="document.getElementById('receiptSplitEditor').innerHTML=''">Cancel</button></div>`;document.getElementById('receiptSplitEditor').scrollIntoView({behavior:'smooth'});}
-function saveReceiptSplit() {if(!receiptSplitTarget)return;const {t,e,pi,amount}=receiptSplitTarget;const split=Object.fromEntries(['rent','electricity','other'].map(k=>[k,Number(document.getElementById('split_'+k).value)]));if(!DB.tenants.includes(t)||!t.entries.includes(e)||entryPayments(e)[pi].amount!==amount){toast('Receipt changed. Open it again.','error');return;}if(!validReceiptSplit(split,amount)){toast('The three amounts must be non-negative and add up to '+financeMoney(amount)+'.','error');return;}e.receiptSplits={...(e.receiptSplits||{}),[pi]:split};saveData(DB,{label:'Split receipt for Flat '+t.flat});document.getElementById('receiptSplitEditor').innerHTML='';receiptSplitTarget=null;renderOwnerSummary();}
 function printFinance() {try{const {from,to}=financeRange();printDoc(financeReportHtml(financeTotals(from,to),from,to));}catch(e){toast(e.message,'error');}}
-function downloadFinance() {try{const {from,to}=financeRange(),s=financeTotals(from,to);const rows=[['Jasmine Residency',from,to],['Particulars','Amount'],['Rent collection (split)',s.rentReceived],['Electricity collection (split)',s.electricReceived],['Other/advance collection (split)',s.otherReceived],['Unsplit receipts',s.unallocated],['Total receipts',s.received],['DHBVN paid',s.dhbvn],['Other expenses',s.expenses],['Total expenditure',s.dhbvn+s.expenses],['Cash balance',s.received-s.dhbvn-s.expenses],['Electricity variance',s.unallocated?'Pending receipt splits':s.electricReceived-s.dhbvn],['Undated receipts excluded',s.undated],[],['Date','Type','Particulars','Meter','Bill month','Remarks','Amount'],...s.records.map(r=>[r.date,r.kind,r.particulars,r.meter,r.billMonth,r.remarks,r.amount])];const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^[=+\-@]/,"'$&").replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a'),url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.href=url;a.download=`Jasmine_Statement_${from}_${to}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){toast(e.message,'error');}}
+function downloadFinance() {try{const {from,to}=financeRange(),s=financeTotals(from,to);const rows=[['Jasmine Residency',from,to],['Particulars','Amount'],['Rent received (including rent advances)',s.rentReceived],['Electricity received',s.electricReceived],['Maintenance / other received',s.otherReceived],['Total receipts',s.received],['DHBVN paid',s.dhbvn],['Other expenses',s.expenses],['Total expenditure',s.dhbvn+s.expenses],['Cash balance',s.received-s.dhbvn-s.expenses],['Electricity variance',s.electricReceived-s.dhbvn],['Undated receipts excluded',s.undated],[],['Date','Type','Particulars','Meter','Bill month','Remarks','Amount'],...s.records.map(r=>[r.date,r.kind,r.particulars,r.meter,r.billMonth,r.remarks,r.amount])];const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^[=+\-@]/,"'$&").replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a'),url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.href=url;a.download=`Jasmine_Statement_${from}_${to}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){toast(e.message,'error');}}
 function referenceMessage(t,n) {const name=t['reference'+n+'Name']||'[Reference Person’s Name]',address=t.address||[t.permanentHouse,t.permanentLocality,t.permanentDistrict,t.permanentState,t.permanentPin].filter(Boolean).join(', ')||'[Permanent address]';return `Dear ${name},\nGreetings from Jasmine Residency, Sector 85, Gurugram.\n${t.name} is currently residing in Flat No. ${t.flat}, Jasmine Residency, Sector 85, Gurugram. They have provided your name as a reference, along with their permanent address: ${address}.\n\nWe would appreciate it if you could kindly confirm whether you know ${t.name} personally and, if possible, confirm that the above information is correct.\n\nThis verification is being requested for our residential records and resident verification purposes.\nThank you for your cooperation.\n\nRegards,\nJasmine Residency\nSikanderpur Badha, Sector 85\nGurugram – 122004\nMob. 9350184989`;}
 function previewReferenceMessage() {const t=readTenantInfo();if(!t)return;const n=document.getElementById('referenceChoice').value;document.getElementById('referenceMessage').value=referenceMessage(t,n);}
 async function copyReferenceMessage() {try{await navigator.clipboard.writeText(document.getElementById('referenceMessage').value);toast('Copied. Review and send it to the reference person.','success');}catch{toast('Select the message and copy it manually.','error');}}
@@ -128,3 +152,14 @@ function downloadTenantSummary() {
   }catch(e){toast(e.message,'error');}
 }
 function openReferenceMessages() {switchTab('info');const section=document.getElementById('referenceMessageSection');section.open=true;section.scrollIntoView({behavior:'smooth',block:'start'});}
+
+function sendReferenceWhatsApp() {
+  const t=readTenantInfo();if(!t)return;
+  const n=document.getElementById('referenceChoice').value;
+  const mobile=String(t['reference'+n+'Mobile']||'').replace(/\D/g,'');
+  if(mobile.length<10||mobile.length>15){toast('Enter a valid mobile number for this reference in Tenant Info.','error');return;}
+  const box=document.getElementById('referenceMessage');
+  if(!box.value.trim())previewReferenceMessage();
+  const number=mobile.length===10?'91'+mobile:mobile;
+  window.open('https://wa.me/'+number+'?text='+encodeURIComponent(box.value),'_blank','noopener');
+}

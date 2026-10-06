@@ -1,14 +1,14 @@
-const CACHE_NAME = 'jasmine-residency-shell-v11';
+const CACHE_NAME = 'jasmine-residency-shell-v12';
 const APP_SHELL = [
   './',
   './index.html',
   './history_data.js',
-  './tenant-details.js?v=4',
+  './tenant-details.js?v=5',
   './verification.js?v=2',
   './verification.css?v=2',
   './electricity.js?v=3',
   './attachments.js?v=2',
-  './finance.js?v=2',
+  './finance.js?v=3',
   './manifest.webmanifest'
 ];
 
