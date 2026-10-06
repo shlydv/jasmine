@@ -117,10 +117,10 @@ test('two payments share one electricity charge even when second installment was
  const t=plain(run("financeTotals('2026-10-01','2026-10-31')"));assert.equal(t.electricReceived,1017);assert.equal(t.otherReceived,200);assert.equal(t.rentReceived,7783);assert.equal(t.received,t.rentReceived+t.electricReceived+t.otherReceived);
  const r=plain(run('financeReceipts()'));assert.equal(r[0].pi,1);assert.equal(r[0].split.electricity,500);assert.equal(r[1].split.electricity,517);assert.equal(r[1].rentAdvance,288);
 });
-test('receipt omits rent effective date, bill retains it but omits tenancy start date',()=>{
+test('receipts and bills retain rent effective date and omit tenancy start date',()=>{
  const {run}=app();run(`DB.tenants[0].entries=[{month:'2026-10',rent:7500,elecBill:1017,paid:8500,lastOutstanding:-5,totalDue:8512,outstanding:12,rentFrom:'2026-10-01'}]`);
- const receipt=run('buildReceiptMessage(DB.tenants[0],DB.tenants[0].entries[0])');assert.doesNotMatch(receipt,/w.e.f/);assert.match(receipt,/Balance still due: ₹12/);
- assert.doesNotMatch(run("buildReceiptDoc(0,'2026-10')"),/w.e.f/);
+ const receipt=run('buildReceiptMessage(DB.tenants[0],DB.tenants[0].entries[0])');assert.match(receipt,/Rent w.e.f. 01 Oct 2026/);assert.doesNotMatch(receipt,/Tenancy start date/);assert.match(receipt,/Balance still due: ₹12/);
+ assert.match(run("buildReceiptDoc(0,'2026-10')"),/w.e.f. 01 Oct 2026/);
  const bill=run('buildBillMessage(DB.tenants[0],DB.tenants[0].entries[0])');assert.match(bill,/Rent w.e.f. 01 Oct 2026/);assert.doesNotMatch(bill,/Tenancy start date/);
 });
 test('WhatsApp reference button targets the selected reference and preserves reviewed message',()=>{
