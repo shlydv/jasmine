@@ -18,6 +18,90 @@ function app() {
   return {el,run:code=>vm.runInContext(code,context)};
 }
 const plain = value => JSON.parse(JSON.stringify(value));
+function editInputs(a,index,changes={}) {
+ const e=plain(a.run(`DB.tenants[0].entries[${index}]`));
+ const payments=plain(a.run(`entryPayments(DB.tenants[0].entries[${index}])`));
+ a.run(`editingEntryId=DB.tenants[0].entries[${index}].id;meterRowsHtml('e',entryMeterRows(DB.tenants[0].entries[${index}]),'');`);
+ const values={month:e.month,rent:e.rent,unitStart:e.unitStart??0,unitFinal:e.unitFinal??0,rate:e.rate??9,elecBill:e.elecBill,lastOutstanding:e.lastOutstanding,maintenance:e.maintenance??0,rentFrom:e.rentFrom??'',paid:payments[0].amount,paid2:payments[1].amount,payDate:payments[0].date,payDate2:payments[1].date,payMode:payments[0].mode,payMode2:payments[1].mode,remarks:e.remarks??'',...changes};
+ Object.entries(values).forEach(([key,value])=>a.el('e_'+key).value=String(value));
+ const meters=plain(a.run(`entryMeterRows(DB.tenants[0].entries[${index}])`));
+ meters.forEach((m,i)=>['start','final','rate','amount'].forEach(key=>a.el(`e_m${i}_${key}`).value=String(m[key]??'')));
+}
+test('payment metadata edits preserve historical monetary values and move cash into its receipt date range',()=>{
+ const a=app();
+ a.run(`DB.tenants[0].entries=[{id:1,month:'2026-05',rent:8000,unitStart:100,unitFinal:110,consumed:9,rate:8,meterBill:0,elecBill:81,lastOutstanding:195,totalDue:8276,paid:8276,outstanding:0,remarks:'Historical adjustment'},{id:2,month:'2026-07',rent:8000,elecBill:0,lastOutstanding:-19,totalDue:-19,paid:0,outstanding:-19}];`);
+ const fields=['rent','consumed','meterBill','elecBill','lastOutstanding','totalDue','paid','outstanding'];
+ const before=plain(a.run('DB.tenants[0].entries')).map(e=>fields.map(k=>e[k]));
+ assert.equal(a.run(`financeTotals('2026-06-01','2026-06-30').received`),0);
+ editInputs(a,0,{payDate:'2026-06-15',payMode:'Cash',remarks:'Confirmed date'});a.run('saveEditedEntry()');
+ assert.deepEqual(plain(a.run('DB.tenants[0].entries')).map(e=>fields.map(k=>e[k])),before);
+ assert.equal(a.run('DB.tenants[0].elecRate'),9);
+ assert.equal(a.run(`financeTotals('2026-06-01','2026-06-30').received`),8276);
+ assert.equal(a.run(`financeTotals('2026-05-01','2026-05-31').received`),0);
+ assert.equal(a.run(`financeTotals('2026-06-01','2026-06-30').undated`),0);
+ assert.equal(a.run('DB.tenants[0].entries[0].payments[0].mode'),'Cash');
+});
+test('dating two existing installments changes dated cash allocation without changing tenant balances',()=>{
+ const a=app();a.run(`DB.tenants[0].entries=[{id:1,month:'2026-05',rent:8000,elecBill:100,lastOutstanding:0,totalDue:8100,paid:8100,outstanding:0,payments:[{amount:5000,date:'',mode:'Cash'},{amount:3100,date:'2026-06-01',mode:'Cash'}]}];`);
+ editInputs(a,0,{payDate:'2026-07-01'});a.run('saveEditedEntry()');
+ assert.equal(a.run('DB.tenants[0].entries[0].outstanding'),0);
+ const june=plain(a.run(`financeTotals('2026-06-01','2026-06-30')`));
+ assert.equal(june.received,3100);assert.equal(june.electricReceived,100);assert.equal(june.rentReceived,3000);
+ assert.equal(a.run(`financeTotals('2026-07-01','2026-07-31').received`),5000);
+});
+test('metadata edits keep saved multi-meter snapshots and overridden bills intact',()=>{
+ const a=app();a.run(`DB.tenants[0].entries=[{id:1,month:'2026-05',rent:8000,elecBill:40,lastOutstanding:0,totalDue:8040,paid:100,outstanding:7940,unitStart:10,unitFinal:20,rate:9,consumed:10,meterBill:140,meters:[{id:'main',name:'Main',unitStart:10,unitFinal:20,rate:9,consumed:10,amount:90},{id:'extra',name:'Second',unitStart:null,unitFinal:null,rate:9,consumed:null,amount:50,manual:true}]}];`);
+ const meters=a.run('JSON.stringify(DB.tenants[0].entries[0].meters)');
+ editInputs(a,0,{payDate:'2026-06-02'});a.run('saveEditedEntry()');
+ assert.equal(a.run('JSON.stringify(DB.tenants[0].entries[0].meters)'),meters);
+ assert.equal(a.run('DB.tenants[0].entries[0].meterBill'),140);
+ assert.equal(a.run('DB.tenants[0].entries[0].elecBill'),40);
+ assert.equal(a.run('DB.tenants[0].entries[0].outstanding'),7940);
+});
+test('moving the earliest bill later removes its old carry-forward and preserves the original opening due or credit',()=>{
+ for(const opening of [50,-50]) {
+  const a=app();a.run(`DB.tenants[0].entries=[{id:1,month:'2026-04',rent:100,elecBill:0,paid:0,lastOutstanding:${opening},totalDue:${opening+100},outstanding:${opening+100}},{id:2,month:'2026-05',rent:100,elecBill:0,paid:0,lastOutstanding:${opening+100},totalDue:${opening+200},outstanding:${opening+200}},{id:3,month:'2026-07',rent:100,elecBill:0,paid:0,lastOutstanding:${opening+200},totalDue:${opening+300},outstanding:${opening+300}}];`);
+  editInputs(a,0,{month:'2026-06'});a.run('saveEditedEntry()');
+  const rows=plain(a.run('DB.tenants[0].entries'));
+  assert.deepEqual(rows.map(e=>e.month),['2026-05','2026-06','2026-07']);
+  assert.deepEqual(rows.map(e=>e.lastOutstanding),[opening,opening+100,opening+200]);
+  assert.deepEqual(rows.map(e=>e.outstanding),[opening+100,opening+200,opening+300]);
+ }
+});
+test('moving a later bill earlier recalculates both positions and all following months',()=>{
+ const a=app();a.run(`DB.tenants[0].entries=[{id:1,month:'2026-05',rent:100,elecBill:0,paid:0,lastOutstanding:50,totalDue:150,outstanding:150},{id:2,month:'2026-06',rent:200,elecBill:0,paid:50,lastOutstanding:150,totalDue:350,outstanding:300},{id:3,month:'2026-07',rent:300,elecBill:0,paid:0,lastOutstanding:300,totalDue:600,outstanding:600}];`);
+ editInputs(a,1,{month:'2026-04'});a.run('saveEditedEntry()');
+ const rows=plain(a.run('DB.tenants[0].entries'));
+ assert.deepEqual(rows.map(e=>e.month),['2026-04','2026-05','2026-07']);
+ assert.deepEqual(rows.map(e=>e.lastOutstanding),[50,200,300]);
+ assert.deepEqual(rows.map(e=>e.outstanding),[200,300,600]);
+});
+test('moving a middle bill later preserves unaffected earlier months and recalculates intervening ones',()=>{
+ const a=app();a.run(`DB.tenants[0].entries=[{id:1,month:'2026-04',rent:100,elecBill:0,paid:0,lastOutstanding:50,totalDue:150,outstanding:150},{id:2,month:'2026-05',rent:200,elecBill:0,paid:0,lastOutstanding:150,totalDue:350,outstanding:350},{id:3,month:'2026-06',rent:300,elecBill:0,paid:0,lastOutstanding:350,totalDue:650,outstanding:650},{id:4,month:'2026-08',rent:100,elecBill:0,paid:0,lastOutstanding:650,totalDue:750,outstanding:750}];`);
+ const first=a.run('JSON.stringify(DB.tenants[0].entries[0])');
+ editInputs(a,1,{month:'2026-07'});a.run('saveEditedEntry()');
+ const rows=plain(a.run('DB.tenants[0].entries'));
+ assert.equal(JSON.stringify(rows[0]),first);
+ assert.deepEqual(rows.map(e=>e.lastOutstanding),[50,150,450,650]);
+ assert.deepEqual(rows.map(e=>e.outstanding),[150,450,650,750]);
+});
+test('moving a sole bill preserves opening balance; moves into occupied months change nothing',()=>{
+ const a=app();a.run(`DB.tenants[0].entries=[{id:1,month:'2026-04',rent:100,elecBill:0,paid:0,lastOutstanding:-50,totalDue:50,outstanding:50}];`);
+ editInputs(a,0,{month:'2026-05'});a.run('saveEditedEntry()');assert.equal(a.run('DB.tenants[0].entries[0].outstanding'),50);
+ a.run(`DB.tenants[0].entries.push({id:2,month:'2026-06',rent:100,elecBill:0,paid:0,lastOutstanding:50,totalDue:150,outstanding:150})`);
+ const before=a.run('JSON.stringify(DB.tenants[0].entries)');
+ editInputs(a,0,{month:'2026-06'});a.run('saveEditedEntry()');assert.equal(a.run('JSON.stringify(DB.tenants[0].entries)'),before);
+});
+test('annual workbook uses each latest in-year closing balance while paid and billed sheets remain additive',()=>{
+ const a=app();a.run(`var XS={plain:0,title:1,head:2,money:3,date:4,totalMoney:5,cell:6,label:7,totalText:8};DB.tenants=[{flat:'101',name:'A',entries:[{month:'2026-04',rent:100,elecBill:20,maintenance:10,paid:30,outstanding:100},{month:'2026-05',rent:120,elecBill:10,maintenance:0,paid:30,outstanding:200},{month:'2027-04',rent:999,paid:999,outstanding:999}]},{flat:'102',name:'B',entries:[{month:'2026-04',rent:100,elecBill:0,paid:150,outstanding:-50},{month:'2026-07',rent:50,elecBill:0,paid:0,outstanding:0}]},{flat:'103',name:'C',checkedOut:true,entries:[{month:'2026-06',rent:100,elecBill:0,paid:125,outstanding:-25}]}];`);
+ const sheets=plain(a.run('buildYearWorkbook(2026)'));
+ assert.equal(sheets[0].rows[4].at(-1).v,'Latest closing balance');
+ assert.deepEqual(sheets[0].rows.slice(5,-1).map(row=>row.at(-1).v),[200,0,-25]);
+ assert.equal(sheets[0].rows.at(-1).at(-1).v,175);
+ assert.equal(sheets[0].rows[5][2].v,100);assert.equal(sheets[0].rows[5][3].v,200);
+ assert.equal(sheets[1].rows.at(-1).at(-1).v,335);
+ assert.equal(sheets[2].rows.at(-1).at(-1).v,510);
+});
 test('legacy payment records stay intact and summaries escape HTML',()=>{
  const {run}=app();
  assert.deepEqual(plain(run(`entryPayments({paid:1234,payDate:'2026-08-01',payMode:'Cash'})`)),[{amount:1234,date:'2026-08-01',mode:'Cash'},{amount:0,date:'',mode:''}]);

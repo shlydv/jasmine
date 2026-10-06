@@ -1792,7 +1792,7 @@ function openEditEntry(entryId) {
   editingEntryId = e.id;
   const previousHelp = entryIndex === 0
     ? 'Earliest available month: enter any balance carried from before this history.'
-    : 'Automatically taken from the previous month and updated when you save.';
+    : 'Carried balance. Payment date, mode and remarks changes leave balances unchanged.';
   document.getElementById('editEntryForm').innerHTML = `
     <div class="form-row">
       <div class="form-group"><label>Month</label><input type="month" id="e_month" value="${escapeAttr(e.month || '')}"></div>
@@ -1807,8 +1807,8 @@ function openEditEntry(entryId) {
     </div>
     <div class="form-row">
       <div class="form-group"><label>Payment 1 received (₹)</label><input type="number" id="e_paid" value="${numberValue(entryPayments(e)[0].amount)}"></div>
-      <div class="form-group"><label>Payment Date</label><input type="date" id="e_payDate" value="${escapeAttr(e.payDate || '')}"></div>
-      <div class="form-group"><label>Payment Mode</label><select id="e_payMode">${paymentModeOptions(e.payMode)}</select></div>
+      <div class="form-group"><label>Payment Date</label><input type="date" id="e_payDate" value="${escapeAttr(entryPayments(e)[0].date)}"></div>
+      <div class="form-group"><label>Payment Mode</label><select id="e_payMode">${paymentModeOptions(entryPayments(e)[0].mode)}</select></div>
     </div>
     <h4>Payment 2 (optional installment)</h4><div class="form-row">
       <div class="form-group"><label>Payment 2 received (₹)</label><input type="number" min="0" step="0.01" id="e_paid2" value="${numberValue(entryPayments(e)[1].amount)}"></div>
@@ -1844,6 +1844,9 @@ function saveEditedEntry() {
   if (!t) return;
   const entry = t.entries.find(item => String(item.id) === String(editingEntryId));
   if (!entry) return;
+  t.entries.sort(compareEntries);
+  const oldIndex=t.entries.indexOf(entry);
+  const ledgerOpening=Number(t.entries[0].lastOutstanding)||0;
   const month = document.getElementById('e_month').value;
   const unitStart = Number(document.getElementById('e_unitStart').value);
   const unitFinal = Number(document.getElementById('e_unitFinal').value);
@@ -1851,41 +1854,55 @@ function saveEditedEntry() {
   const elecBill = Number(document.getElementById('e_elecBill').value);
   if (!month) { toast('Please select a month', 'error'); return; }
   if ((t.entries || []).some(item => item !== entry && item.month === month)) { toast(fmtMonth(month) + ' already has another entry.', 'error'); return; }
-  if (![unitStart, unitFinal, rate, elecBill].every(Number.isFinite) || unitFinal < unitStart || rate < 0 || elecBill < 0) {
-    toast('Check the meter readings, rate and electricity bill.', 'error'); return;
-  }
-  const extra=calculateMeterRows(readMeterRows('e'));
-  if(extra.error){toast(extra.error,'error');return;}
   const payments = readPaymentInputs('e');
   if (!payments) return;
+  const rent=Number(document.getElementById('e_rent').value);
   const maintenance=Number(document.getElementById('e_maintenance')?.value||0);
-  if(!Number.isFinite(maintenance)||maintenance<0){toast('Maintenance / other charges must be zero or greater.','error');return;}
-  entry.maintenance=maintenance;entry.rentFrom=document.getElementById('e_rentFrom')?.value||'';
+  const opening=Number(document.getElementById('e_lastOutstanding').value)||0;
+  const amountsChanged=entryPayments(entry).some((p,i)=>Number(p.amount)!==payments[i].amount);
+  const monthChanged=entry.month!==month;
+  const balanceChanged=monthChanged||rent!==(Number(entry.rent)||0)||elecBill!==(Number(entry.elecBill)||0)||maintenance!==chargeExtras(entry)||amountsChanged||(oldIndex===0&&opening!==ledgerOpening);
+  const meterValues=rows=>JSON.stringify(rows.map(m=>[m.id,m.name,...['start','final','rate','amount'].map(k=>m[k]==null||m[k]===''?null:Number(m[k]))]));
+  const meterDrafts=readMeterRows('e');
+  const metersChanged=unitStart!==(Number(entry.unitStart)||0)||unitFinal!==(Number(entry.unitFinal)||0)||rate!==Number(entry.rate??t.elecRate??9)||meterValues(meterDrafts)!==meterValues(entryMeterRows(entry));
+  let extra;
+  if(balanceChanged||metersChanged) {
+    if (![rent,maintenance,unitStart,unitFinal,rate,elecBill].every(Number.isFinite)||rent<0||maintenance<0||unitFinal<unitStart||rate<0||elecBill<0) {
+      toast('Check the rent, charges, meter readings and rate.','error');return;
+    }
+    extra=calculateMeterRows(meterDrafts);
+    if(extra.error){toast(extra.error,'error');return;}
+  }
+  if(maintenance!==chargeExtras(entry))entry.maintenance=maintenance;
+  entry.rentFrom=document.getElementById('e_rentFrom')?.value||'';
   if(JSON.stringify(entryPayments(entry))!==JSON.stringify(payments))delete entry.receiptSplits;
   entry.month = month;
-  entry.rent = nonNegativeNumber('e_rent');
-  entry.unitStart = unitStart;
-  entry.unitFinal = unitFinal;
-  entry.consumed = unitFinal - unitStart;
-  entry.rate = rate;
-  entry.meterBill = roundMoney(entry.consumed * rate + extra.total);
-  entry.meters = [primaryMeter(t,unitStart,unitFinal,rate,entry.consumed*rate),...extra.meters];
-  entry.elecBill = elecBill;
+  if(rent!==(Number(entry.rent)||0))entry.rent=rent;
+  if(metersChanged) {
+    entry.unitStart=unitStart;entry.unitFinal=unitFinal;entry.consumed=unitFinal-unitStart;entry.rate=rate;
+    entry.meterBill=roundMoney(entry.consumed*rate+extra.total);
+    entry.meters=[primaryMeter(t,unitStart,unitFinal,rate,entry.consumed*rate),...extra.meters];
+    t.elecRate=rate;
+  }
+  if(elecBill!==(Number(entry.elecBill)||0))entry.elecBill=elecBill;
   entry.payments = payments;
-  entry.paid = roundMoney(payments.reduce((total, payment) => total + payment.amount, 0));
+  if(amountsChanged)entry.paid=roundMoney(payments.reduce((total,payment)=>total+payment.amount,0));
   entry.payDate = document.getElementById('e_payDate').value;
   entry.payMode = document.getElementById('e_payMode').value;
   entry.remarks = document.getElementById('e_remarks').value.trim();
   t.entries.sort(compareEntries);
-  const startIndex = t.entries.findIndex(item => String(item.id) === String(editingEntryId));
-  if (startIndex === 0) entry.lastOutstanding = Number(document.getElementById('e_lastOutstanding').value) || 0;
-  recalculateBalanceChain(t, startIndex);
-  t.elecRate = rate;
+  const newIndex=t.entries.indexOf(entry);
+  if(balanceChanged) {
+    // Moving the first bill must not leave its charges in the new first opening.
+    if(monthChanged)t.entries[0].lastOutstanding=oldIndex===0?opening:ledgerOpening;
+    if(oldIndex===0&&newIndex===0)entry.lastOutstanding=opening;
+    recalculateBalanceChain(t,Math.min(oldIndex,newIndex));
+  }
   saveData(DB, { label: 'Edited ' + fmtMonth(month) + ' transaction for Flat ' + t.flat });
   closeModal('editEntryModal');
   openTenant(currentTenantIdx);
   switchTab('history');
-  toast('Transaction updated and later balances recalculated.', 'success');
+  toast(balanceChanged?'Transaction updated and later balances recalculated.':'Transaction updated; balances unchanged.', 'success');
 }
 
 let pendingDeleteId = null;
@@ -3242,13 +3259,13 @@ function buildYearWorkbook(startYear) {
     .sort((a, b) => naturalFlatCompare(a.tenant.flat, b.tenant.flat));
 
   // Two views of the same year: what each room still owed, and what it paid.
-  const sheet = (title, valueOf) => {
+  const sheet = (title, valueOf, closing=false) => {
     const rows = [
       [xText(`${PROPERTY_NAME} — ${title}`, XS.title)],
       [xText('Year', XS.label), xText(financialYearLabel(startYear), XS.plain)],
       [xText('Generated', XS.label), xText(new Date().toLocaleString('en-IN'), XS.plain)],
       [],
-      headerCells(['Room', 'Tenant'].concat(months.map(fmtMonth)).concat(['Total']))
+      headerCells(['Room', 'Tenant'].concat(months.map(fmtMonth)).concat([closing?'Latest closing balance':'Total']))
     ];
     const totals = months.map(() => 0);
     let grand = 0;
@@ -3259,7 +3276,7 @@ function buildYearWorkbook(startYear) {
         if (!entry) return xText('');
         const value = valueOf(entry);
         totals[index] += value;
-        rowTotal += value;
+        rowTotal = closing ? value : rowTotal + value;
         return xNum(value);
       });
       grand += rowTotal;
@@ -3277,7 +3294,7 @@ function buildYearWorkbook(startYear) {
   };
 
   return [
-    sheet('Closing balance', entry => Number(entry.outstanding) || 0),
+    sheet('Closing balance', entry => Number(entry.outstanding) || 0,true),
     sheet('Paid', entry => Number(entry.paid) || 0),
     sheet('Billed', entry => (Number(entry.rent) || 0) + (Number(entry.elecBill) || 0) + chargeExtras(entry))
   ];
