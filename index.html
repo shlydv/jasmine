@@ -616,7 +616,7 @@
   <div class="summary-toolbar">
     <div>
       <div class="section-title" style="margin:0;">Tenant Rent &amp; Bills</div>
-      <div style="font-size:13px;color:var(--gray);margin-top:4px;">Rent, electricity, payments and balances for each tenant.</div>
+      <div style="font-size:13px;color:var(--gray);margin-top:4px;">Amounts charged to tenants, payments against those bills, and balances.</div>
     </div>
     <div style="display:flex; align-items:end; gap:12px; flex-wrap:wrap;">
       <label>Period<br><select id="tenantSummaryPeriod" onchange="changeTenantSummaryPeriod()"><option value="month">One month</option><option value="range">Custom period</option><option value="year">Financial year</option><option value="ledger">All billing records</option></select></label>
@@ -655,7 +655,7 @@
   </div>
   </div></section>
   <section id="ownerSummarySection" style="display:none">
-    <div class="summary-toolbar"><div><div class="section-title">Owner Income &amp; Expenses</div><p>Money received, expenses paid and the balance for Jasmine Residency.</p></div></div>
+    <div class="summary-toolbar"><div><div class="section-title">Owner Income &amp; Expenses</div><p>Cash received by payment date, expenses paid, and the balance for Jasmine Residency.</p></div></div>
     <div class="card"><div class="form-row"><div class="form-group"><label>From</label><input id="finFrom" type="date" onchange="renderOwnerSummary()"></div><div class="form-group"><label>To</label><input id="finTo" type="date" onchange="renderOwnerSummary()"></div></div><button class="btn btn-primary" onclick="printFinance()">Print owner summary / PDF</button> <button class="btn btn-success" onclick="downloadFinance()">Download owner summary / CSV</button></div>
     <div class="card rep-doc" id="financeResults"></div>
     <details class="card"><summary><strong>Payment breakdown</strong></summary><p>Calculated automatically from each bill and its payments.</p><div id="financeReceipts"></div></details>
@@ -717,7 +717,7 @@
 <div id="screen-backup" class="screen">
   <div class="section-title" style="margin-top:20px;">💾 Backup &amp; Restore</div>
   <p style="color:var(--gray); font-size:14px; margin-top:6px; margin-bottom:20px;">
-    The app works offline after it has been opened once, but browser storage is device-specific. Use Export regularly until cloud sync is configured.
+    Changes save to the cloud automatically while online. Offline changes stay on this device and upload when internet returns. Keep downloaded backups for extra protection.
   </p>
 
   <div class="card" style="margin-bottom:20px;">
@@ -732,6 +732,7 @@
     <p style="color:var(--gray); font-size:14px; line-height:1.6;">The app keeps the last 20 saved changes on this device. This can restore an accidental checkout, tenant edit, bill, import, delete, or new renter.</p>
     <button class="btn" id="undoBtn" type="button" style="background:#f4d35e; color:#3d2d00;" onclick="undoLastChange()">Undo last change</button>
     <div id="undoInfo" style="margin-top:10px; font-size:13px; color:var(--gray);"></div>
+
   </div>
 
   <div class="card">
@@ -762,13 +763,11 @@
   <div class="card" style="background:#f4f0ff; border:2px solid #c4b5fd;">
     <h3 style="color:#6d28d9;">☁️ Cloud backup / access anywhere</h3>
     <p style="color:var(--gray); font-size:14px; line-height:1.6;">
-      Your data remains available offline in this browser. Each online open fetches and caches the complete portfolio of all flats. Offline changes are kept locally and offered for upload when the network returns; the upload asks for the passcode and can be cancelled.
+      Your data remains available offline in this browser. Local edits upload automatically while online and when internet returns. Cloud updates are reconciled with this device’s edits; they do not replace unsynced local work.
     </p>
     <div id="cloudSyncStatus" style="margin:12px 0; font-size:14px; font-weight:600; color:var(--gray);">Cloud sync: checking…</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn btn-primary" type="button" onclick="syncCloudData(true)">☁️ Sync now</button>
-      <button class="btn" id="useCloudBtn" type="button" style="display:none; background:#e0e7ff; color:#3730a3;" onclick="useCloudCopy()">Use cloud copy</button>
-      <button class="btn" id="pushLocalBtn" type="button" style="display:none; background:#fef3c7; color:#92400e;" onclick="pushLocalCopy()">Keep this device’s copy</button>
+      <button class="btn btn-primary" type="button" onclick="syncCloudData(true)">☁️ Save to cloud now</button>
     </div>
     <div id="cloudSyncDetail" style="margin-top:10px; font-size:13px; color:var(--gray);"></div>
   </div>
@@ -1066,24 +1065,11 @@
   </div>
 </div>
 
-<!-- CLOUD PUSH CONFIRMATION -->
-<div class="modal-overlay" id="cloudPushModal">
-  <div class="modal">
-    <h3>Confirm cloud upload</h3>
-    <p id="cloudPushMessage" style="font-size:15px; color:var(--gray); line-height:1.6;">This will upload the local copy of all flats to Cloudflare D1. Enter the passcode to continue, or cancel to keep the data only on this device for now.</p>
-    <input id="cloudPushPin" class="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Passcode" onkeydown="if(event.key==='Enter') confirmCloudPush()">
-    <div id="cloudPushError" class="pin-error"></div>
-    <div class="modal-footer">
-      <button class="btn" style="background:var(--border); color:#333;" onclick="cancelCloudPush()">Cancel upload</button>
-      <button class="btn btn-primary" onclick="confirmCloudPush()">Upload to D1</button>
-    </div>
-  </div>
-</div>
-
 <div id="toast"></div>
 <div id="printArea" class="rep-doc"></div>
 
 <script src="./history_data.js"></script>
+<script src="./sync-merge.js?v=1"></script>
 <script src="./tenant-details.js?v=5"></script>
 <script src="./verification.js?v=2"></script>
 <script src="./electricity.js?v=3"></script>
@@ -1097,6 +1083,8 @@ const STORE_KEY = 'jasmineResidency_v4';
 const LEGACY_STORE_KEYS = ['jasmineResidency_v3', 'jasmineResidency_v2'];
 const CLOUD_API = './api/data';
 const CLOUD_META_KEY = 'jasmineResidency_cloudMeta_v1';
+const CLOUD_BASE_KEY = 'jasmineResidency_cloudBase_v1';
+const SYNC_RECOVERY_KEY = 'jasmineResidency_syncRecovery_v1';
 let cloudSyncTimer = null;
 let cloudSyncInProgress = false;
 let cloudSyncStarted = false;
@@ -1106,9 +1094,6 @@ const APP_PIN = '172695';
 const PIN_SESSION_KEY = 'jasmineResidency_pinUnlocked_v1';
 const UNDO_KEY = 'jasmineResidency_undo_v1';
 let appUnlocked = false;
-let cloudPushPermission = false;
-let pendingOfflinePush = false;
-let cloudPushConsentResolver = null;
 let undoStack = [];
 let lastSavedSnapshot = '';
 
@@ -1150,9 +1135,7 @@ function unlockApp(fromSession = false) {
 }
 
 function lockApp() {
-  if (cloudPushConsentResolver) cancelCloudPush();
   appUnlocked = false;
-  cloudPushPermission = false;
   clearTimeout(cloudSyncTimer);
   try { sessionStorage.removeItem(PIN_SESSION_KEY); } catch (storageError) {}
   const gate = document.getElementById('pinGate');
@@ -1214,14 +1197,16 @@ function setCloudSyncState(state, message) {
 }
 
 function queueCloudSave() {
-  if (!appUnlocked || !cloudSyncStarted || cloudSyncState === 'auth' || cloudSyncState === 'unavailable' || !navigator.onLine) return;
+  if (!appUnlocked) return;
+  if (!navigator.onLine) {setCloudSyncState('offline','Saved on this device. Upload resumes automatically when internet returns.');return;}
   clearTimeout(cloudSyncTimer);
-  cloudSyncTimer = setTimeout(() => pushCloudData(readCloudMeta().version), 800);
+  cloudSyncTimer = setTimeout(() => syncCloudData(), 800);
 }
 
 function loadData() {
   try {
     const current = localStorage.getItem(STORE_KEY);
+    if (current) lastSavedSnapshot=current;
     if (current) return normalizeData(JSON.parse(current));
 
     for (const legacyKey of LEGACY_STORE_KEYS) {
@@ -1248,7 +1233,6 @@ function saveData(data, options = {}) {
     const meta = readCloudMeta();
     meta.dirty = true;
     writeCloudMeta(meta);
-    if (!navigator.onLine) pendingOfflinePush = true;
     queueCloudSave();
   }
 }
@@ -4000,6 +3984,9 @@ function importData(event) {
 }
 
 async function readCloudResponse(response) {
+  if(response.redirected||!String(response.headers.get('content-type')||'').includes('application/json')) {
+    const error=new Error('Cloud sign-in is required before saving can resume.');error.status=401;throw error;
+  }
   let body = null;
   try { body = await response.json(); } catch (error) {}
   if (response.ok) return body || {};
@@ -4022,163 +4009,107 @@ async function fetchCloudData() {
 
 function handleCloudError(error) {
   if (error && error.status === 401) {
-    setCloudSyncState('auth', 'Open the website through the Cloudflare Access login, then tap Sync now.');
+    setCloudSyncState('auth', 'Sign in to Cloudflare again to resume saving. Your local edits are safe and will upload automatically after sign-in.');
   } else if (error && (error.status === 404 || error.status === 503)) {
     setCloudSyncState('unavailable', error.message || 'Create/bind the D1 database and apply schema.sql first.');
   } else if (!navigator.onLine) {
     setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
   } else {
-    setCloudSyncState('error', error && error.message ? error.message : 'Try Sync now again.');
+    setCloudSyncState('error', error && error.message ? error.message : 'Your local edits are retained; saving will retry automatically.');
   }
   renderBackupInfo();
 }
 
-function requestCloudPushConsent(message) {
-  if (cloudPushPermission) return Promise.resolve(true);
-  if (!appUnlocked) return Promise.resolve(false);
-  return new Promise(resolve => {
-    cloudPushConsentResolver = resolve;
-    document.getElementById('cloudPushMessage').textContent = message || 'This will upload the local copy of all flats to Cloudflare D1. Enter the passcode to continue, or cancel to keep the data only on this device for now.';
-    document.getElementById('cloudPushPin').value = '';
-    document.getElementById('cloudPushError').textContent = '';
-    document.getElementById('cloudPushModal').classList.add('open');
-    setTimeout(() => document.getElementById('cloudPushPin').focus(), 50);
-  });
+function readCloudBase() {
+  try {return JSON.parse(localStorage.getItem(CLOUD_BASE_KEY)||'null');}catch{return null;}
 }
 
-function finishCloudPushConsent(allowed) {
-  const resolver = cloudPushConsentResolver;
-  cloudPushConsentResolver = null;
-  document.getElementById('cloudPushModal').classList.remove('open');
-  if (resolver) resolver(allowed);
+function protectSyncRecovery(data) {
+  // Keep a separate recovery point even if routine Undo points later rotate out.
+  const payload=JSON.stringify({at:Date.now(),data});
+  localStorage.setItem(SYNC_RECOVERY_KEY,payload);
 }
 
-function cancelCloudPush() {
-  finishCloudPushConsent(false);
-}
-
-function confirmCloudPush() {
-  const pin = document.getElementById('cloudPushPin').value;
-  if (pin !== APP_PIN) {
-    document.getElementById('cloudPushError').textContent = 'Incorrect passcode. Upload cancelled unless the correct passcode is entered.';
-    document.getElementById('cloudPushPin').value = '';
-    document.getElementById('cloudPushPin').focus();
-    return;
-  }
-  cloudPushPermission = true;
-  finishCloudPushConsent(true);
-}
-
-async function pushCloudData(expectedVersion, options = {}) {
-  if (!appUnlocked || cloudSyncInProgress || !navigator.onLine || location.protocol === 'file:') return false;
-  const consent = await requestCloudPushConsent(pendingOfflinePush
-    ? 'This device has changes made while offline. Upload the complete local copy of all flats to Cloudflare D1? Enter the passcode to continue, or cancel to keep the offline copy local.'
-    : options.message);
-  if (!consent) {
-    pendingOfflinePush = true;
-    setCloudSyncState('local_only', 'Upload cancelled. The complete local copy remains safe on this device; use Sync now when ready.');
-    renderBackupInfo();
-    return false;
-  }
-  cloudSyncInProgress = true;
-  setCloudSyncState('syncing', 'Uploading files and the latest local copy…');
-  const uploadData = JSON.parse(JSON.stringify(DB));
-  try {
-    await syncAttachmentFiles(uploadData);
-    const response = await fetch(CLOUD_API, {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ data: uploadData, expectedVersion })
-    });
-    const result = await readCloudResponse(response);
-    writeCloudMeta({ version: Number(result.version) || 0, dirty: JSON.stringify(DB) !== JSON.stringify(uploadData), lastSyncAt: Date.now() });
-    pendingOfflinePush = false;
-    setCloudSyncState('connected', options.initial ? 'Initial local copy of all flats uploaded to Cloudflare D1.' : 'Saved all flats to Cloudflare D1 just now.');
-    renderBackupInfo();
-    if(readCloudMeta().dirty) queueCloudSave();
-    return true;
-  } catch (error) {
-    if (error && error.status === 409) {
-      setCloudSyncState('conflict', 'Another device changed the cloud copy. Export this device’s JSON before choosing a copy.');
-    } else {
-      handleCloudError(error);
-    }
-    return false;
-  } finally {
-    cloudSyncInProgress = false;
-  }
+function rememberCloudCopy(data,version) {
+  localStorage.setItem(CLOUD_BASE_KEY,JSON.stringify(data));
+  writeCloudMeta({version,dirty:JSON.stringify(DB)!==JSON.stringify(data),lastSyncAt:Date.now()});
 }
 
 async function syncCloudData(manual = false) {
-  if (!appUnlocked || cloudSyncInProgress || location.protocol === 'file:') return;
+  if (!appUnlocked || cloudSyncInProgress || location.protocol === 'file:') return false;
   if (!navigator.onLine) {
-    setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
-    renderBackupInfo();
-    return;
+    setCloudSyncState('offline','Saved on this device. Upload resumes automatically when internet returns.');
+    return false;
   }
-
-  cloudSyncStarted = true;
-  setCloudSyncState('checking', manual ? 'Checking the cloud copy…' : 'Checking cloud sync setup…');
+  cloudSyncInProgress=true;
+  cloudSyncStarted=true;
+  setCloudSyncState('syncing','Saving your changes to the cloud…');
   try {
-    const remote = await fetchCloudData();
-    const meta = readCloudMeta();
-
-    if (!remote.data) {
-      await pushCloudData(0, { initial: true });
-      return;
+    // Retry a version conflict against a fresh copy, without replacing local edits.
+    for(let attempt=0;attempt<3;attempt++) {
+      const remote=await fetchCloudData();
+      const meta=readCloudMeta(),base=readCloudBase();
+      const hasLocal=localStorage.getItem(STORE_KEY)!==null;
+      const localEdited=meta.dirty||(base&&JSON.stringify(DB)!==JSON.stringify(base));
+      if(!hasLocal&&!localEdited&&remote.data) {
+        const incoming=normalizeData(remote.data);
+        protectSyncRecovery(DB);
+        saveData(incoming,{skipCloud:true,label:'Initial cloud copy'});DB=incoming;
+        rememberCloudCopy(DB,Number(remote.version)||0);
+        renderHome();renderBackupInfo();
+        setCloudSyncState('connected','Cloud data loaded on this new device. Changes will save automatically.');
+        return true;
+      }
+      // Existing devices without a baseline are reconciled conservatively on upgrade.
+      const needsUpload=localEdited||!base||!remote.data||Number(remote.version)<meta.version;
+      if(!needsUpload) {
+        if(Number(remote.version)!==meta.version) {
+          const incoming=normalizeData(mergeLocalEdits(base,DB,remote.data));
+          protectSyncRecovery(DB);
+          saveData(incoming,{skipCloud:true,label:'Cloud update (previous copy retained)'});DB=incoming;
+          renderHome();
+        }
+        rememberCloudCopy(DB,Number(remote.version)||0);
+        setCloudSyncState('connected','All changes saved to the cloud.');renderBackupInfo();return true;
+      }
+      const localBefore=JSON.parse(JSON.stringify(DB));
+      const staleCloud=base&&Number(remote.version)<meta.version;
+      const upgradingCleanDevice=!base&&!meta.dirty&&remote.data&&Number(remote.version)>=meta.version;
+      const uploadData=normalizeData(staleCloud||!remote.data?localBefore:upgradingCleanDevice?mergeLocalEdits(null,remote.data,localBefore):mergeLocalEdits(base,localBefore,remote.data));
+      await syncAttachmentFiles(uploadData);
+      const response=await fetch(CLOUD_API,{
+        method:'PUT',credentials:'same-origin',headers:{'content-type':'application/json',accept:'application/json'},
+        body:JSON.stringify({data:uploadData,expectedVersion:Number(remote.version)||0})
+      });
+      let result;
+      try {result=await readCloudResponse(response);if(!Number.isInteger(result.version)||result.version<=Number(remote.version||0))throw new Error('Cloud save could not be verified. Local changes will be retried.');}catch(error){if(error.status===409)continue;throw error;}
+      // Edits made while upload was running stay local and are uploaded on the next pass.
+      const current=JSON.parse(JSON.stringify(DB));
+      const reconciled=normalizeData(mergeLocalEdits(localBefore,current,uploadData));
+      if(JSON.stringify(current)!==JSON.stringify(reconciled)) {
+        protectSyncRecovery(current);
+        saveData(reconciled,{skipCloud:true,label:'Merged cloud records (local edits kept)'});DB=reconciled;
+        renderHome();
+      }
+      rememberCloudCopy(uploadData,Number(result.version)||0);
+      setCloudSyncState(readCloudMeta().dirty?'syncing':'connected',readCloudMeta().dirty?'New changes queued for automatic upload.':'All changes saved to the cloud.');
+      renderBackupInfo();return true;
     }
-
-    if (meta.dirty && meta.version !== Number(remote.version)) {
-      setCloudSyncState('conflict', 'This device has unsynced changes and the cloud has a newer copy. Export before choosing a copy.');
-      renderBackupInfo();
-      return;
-    }
-
-    if (meta.dirty) {
-      await pushCloudData(Number(remote.version));
-      return;
-    }
-
-    DB = normalizeData(remote.data);
-    saveData(DB, { skipCloud: true });
-    writeCloudMeta({ version: Number(remote.version) || 0, dirty: false, lastSyncAt: Date.now() });
-    pendingOfflinePush = false;
-    const flatCount = DB.tenants.length;
-    setCloudSyncState('connected', `Loaded and cached all ${flatCount} flats from the cloud at ${new Date(Number(remote.updatedAt) || Date.now()).toLocaleString('en-IN')}.`);
-    renderHome();
-    renderBackupInfo();
-  } catch (error) {
-    handleCloudError(error);
+    setCloudSyncState('error','Your edits are safe on this device. Cloud changed during saving; retrying automatically.');
+    return false;
+  } catch(error) {handleCloudError(error);return false;}
+  finally {
+    cloudSyncInProgress=false;
+    clearTimeout(cloudSyncTimer);
+    if(appUnlocked&&(readCloudMeta().dirty||cloudSyncState==='error'||cloudSyncState==='auth'||cloudSyncState==='unavailable'))
+      cloudSyncTimer=setTimeout(()=>syncCloudData(),readCloudMeta().dirty&&!['auth','error','unavailable'].includes(cloudSyncState)?800:15000);
   }
 }
 
-async function useCloudCopy() {
-  if (!confirm('Replace this device’s data with the cloud copy? Export a local backup first if you may need these changes.')) return;
-  try {
-    const remote = await fetchCloudData();
-    if (!remote.data) throw new Error('There is no cloud copy yet.');
-    DB = normalizeData(remote.data);
-    saveData(DB, { skipCloud: true });
-    writeCloudMeta({ version: Number(remote.version) || 0, dirty: false, lastSyncAt: Date.now() });
-    setCloudSyncState('connected', 'Cloud copy loaded after conflict review.');
-    renderHome();
-    renderBackupInfo();
-    toast('Cloud copy loaded', 'success');
-  } catch (error) {
-    handleCloudError(error);
-  }
-}
-
-async function pushLocalCopy() {
-  if (!confirm('Replace the cloud copy with this device’s data? Export a backup first and continue only if this is intentional.')) return;
-  try {
-    const remote = await fetchCloudData();
-    await pushCloudData(Number(remote.version) || 0);
-  } catch (error) {
-    handleCloudError(error);
-  }
-}
+// Older links cannot replace this device with a stale cloud snapshot.
+function useCloudCopy() {return syncCloudData(true);}
+function pushLocalCopy() {return syncCloudData(true);}
+function pushCloudData() {return syncCloudData(true);}
 
 // Header date
 document.getElementById('headerDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
@@ -4199,18 +4130,16 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 } else if (location.protocol === 'file:') {
   updateOfflineStatus('Opened as a local file: data works locally, but browser install requires the HTTPS website.', 'var(--orange)');
 }
-window.addEventListener('online', () => {
-  pendingOfflinePush = pendingOfflinePush || readCloudMeta().dirty;
-  cloudPushPermission = false;
-  updateOfflineStatus('Online — local changes will sync after the cloud-upload passcode is confirmed.', 'var(--green)');
-  syncCloudData();
+window.addEventListener('online',()=>{
+  updateOfflineStatus('Online — changes save to the cloud automatically.','var(--green)');syncCloudData();
 });
-window.addEventListener('offline', () => {
-  pendingOfflinePush = true;
-  cloudPushPermission = false;
-  updateOfflineStatus('Offline mode — the app remains usable on this device.', 'var(--orange)');
-  setCloudSyncState('offline', 'Changes are being kept on this device and will sync when you are online.');
+window.addEventListener('offline',()=>{
+  updateOfflineStatus('Offline — changes are saved on this device.','var(--orange)');
+  setCloudSyncState('offline','Saved on this device. Upload resumes automatically when internet returns.');
 });
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncCloudData();});
+window.addEventListener('focus',()=>syncCloudData());
+setInterval(()=>{if(appUnlocked&&navigator.onLine&&!document.hidden)syncCloudData();},60000);
 
 // Init
 document.getElementById('newDobInput').innerHTML = dobInput('nt_dob');
