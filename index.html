@@ -2101,7 +2101,7 @@ For the month of: ${fmtMonth(entry.month)}
 
 Rent: ₹${fmt(entry.rent)}
 Maintenance / other charges: ₹${fmt(chargeExtras(entry))}
-${entry.rentFrom ? "Rent w.e.f. "+fmtDate(entry.rentFrom)+"\n" : ""}${receiptElectricityLine(entry)}
+${receiptElectricityLine(entry)}
 ${entry.meters?.length > 1 ? electricityDescription(entry) : ''}
 ${previousLine}Total due: ₹${fmt(entry.totalDue)}
 
@@ -2138,7 +2138,7 @@ function buildReceiptDoc(tenantIndex, month) {
     </div>
     <table class="rep-table" style="max-width:520px;">
       <tbody>
-        ${row('Rent'+(entry.rentFrom?' (w.e.f. '+fmtDate(entry.rentFrom)+')':''), money(entry.rent))}
+        ${row('Rent', money(entry.rent))}
         ${row('Maintenance / other charges',money(chargeExtras(entry)))}
         ${row('Electricity' + (entry.unitStart != null && entry.unitFinal != null
           ? ` <small style="color:#666;">(${escapeHtml(electricityDescription(entry))})</small>` : ''), money(entry.elecBill))}
