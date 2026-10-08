@@ -2167,7 +2167,7 @@ function buildBillMessage(t, entry) {
     ? `Unit Start=${entry.unitStart}\nUnit Final=${entry.unitFinal}\nTotal unit=${entry.consumed}\nRate=${entry.rate}`
     : 'Meter reading not recorded';
 
-  return `${electricityHeader}${entry.rentFrom ? ' (Rent w.e.f. '+fmtDate(entry.rentFrom)+')' : ''}
+  return `${electricityHeader}${entry.rentFrom ? ' *(Rent w.e.f. '+fmtDate(entry.rentFrom)+')*' : ''}
 Name- ${t.name}
 Flat No =${t.flat}
 Rent Month=${fmtMonth(entry.month)}
