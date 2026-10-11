@@ -1103,8 +1103,35 @@ function loadUndoStack() {
   }
 }
 
+function isStorageQuotaError(error) {
+  return error && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED' || error.code === 22 || error.code === 1014);
+}
+
+function writeLocalData(key, value) {
+  try { localStorage.setItem(key, value); }
+  catch (error) {
+    if (!isStorageQuotaError(error)) throw error;
+    // Undo is disposable history. Never remove current records, the cloud baseline,
+    // or the independent recovery copy to make room for a save.
+    localStorage.removeItem(UNDO_KEY);
+    undoStack = [];
+    localStorage.setItem(key, value);
+  }
+}
+
 function persistUndoStack() {
-  try { localStorage.setItem(UNDO_KEY, JSON.stringify(undoStack.slice(-20))); } catch (error) {}
+  undoStack = undoStack.slice(-20);
+  // Leave room for current records, reconciliation and recovery. localStorage
+  // commonly accounts for UTF-16 characters, so budget roughly 1 MB for Undo.
+  while (undoStack.length && JSON.stringify(undoStack).length > 512 * 1024) undoStack.shift();
+  while (undoStack.length) {
+    try { localStorage.setItem(UNDO_KEY, JSON.stringify(undoStack)); return; }
+    catch (error) {
+      if (!isStorageQuotaError(error)) return;
+      undoStack.shift();
+    }
+  }
+  localStorage.removeItem(UNDO_KEY);
 }
 
 function pushUndoSnapshot(label, snapshot) {
@@ -1162,7 +1189,7 @@ function readCloudMeta() {
 }
 
 function writeCloudMeta(meta) {
-  localStorage.setItem(CLOUD_META_KEY, JSON.stringify(meta));
+  writeLocalData(CLOUD_META_KEY, JSON.stringify(meta));
 }
 
 function setCloudSyncState(state, message) {
@@ -1221,10 +1248,11 @@ function loadData() {
 function saveData(data, options = {}) {
   data.schemaVersion = 4;
   const serialized = JSON.stringify(data);
-  if (!options.skipUndo && lastSavedSnapshot && serialized !== lastSavedSnapshot) {
-    pushUndoSnapshot(options.label || 'Previous change', lastSavedSnapshot);
+  const previousSnapshot = lastSavedSnapshot;
+  writeLocalData(STORE_KEY, serialized);
+  if (!options.skipUndo && previousSnapshot && serialized !== previousSnapshot) {
+    pushUndoSnapshot(options.label || 'Previous change', previousSnapshot);
   }
-  localStorage.setItem(STORE_KEY, serialized);
   lastSavedSnapshot = serialized;
   if (!options.skipCloud) {
     const meta = readCloudMeta();
@@ -4041,11 +4069,11 @@ function readCloudBase() {
 function protectSyncRecovery(data) {
   // Keep a separate recovery point even if routine Undo points later rotate out.
   const payload=JSON.stringify({at:Date.now(),data});
-  localStorage.setItem(SYNC_RECOVERY_KEY,payload);
+  writeLocalData(SYNC_RECOVERY_KEY,payload);
 }
 
 function rememberCloudCopy(data,version) {
-  localStorage.setItem(CLOUD_BASE_KEY,JSON.stringify(data));
+  writeLocalData(CLOUD_BASE_KEY,JSON.stringify(data));
   writeCloudMeta({version,dirty:JSON.stringify(DB)!==JSON.stringify(data),lastSyncAt:Date.now()});
 }
 
@@ -4159,6 +4187,7 @@ setInterval(()=>{if(appUnlocked&&navigator.onLine&&!document.hidden)syncCloudDat
 document.getElementById('newDobInput').innerHTML = dobInput('nt_dob');
 renderHome();
 renderBackupInfo();
+persistUndoStack();
 initializePinGate();
 </script>
 </body>

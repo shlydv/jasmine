@@ -12,7 +12,7 @@ function harness(local,{base=null,version=1,dirty=true,stored=true}={}) {
   store.set('meta',JSON.stringify({version,dirty}));if(base)store.set('base',JSON.stringify(base));
   const elements=new Map();const el=id=>{if(!elements.has(id))elements.set(id,{style:{},textContent:'',value:'',disabled:false});return elements.get(id);};
   const timers=[];
-  const ctx=vm.createContext({console,Date,TextEncoder,Response,URL,Blob,setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout(){},localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},document:{getElementById:el,hidden:false},navigator:{onLine:true},location:{protocol:'https:'},toast(){}});
+  const ctx=vm.createContext({console,Date,TextEncoder,Response,URL,Blob,setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearTimeout(){},localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},document:{getElementById:el,hidden:false},navigator:{onLine:true},location:{protocol:'https:'},toast(){}});
   const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
   const declarations=[...html.split('<script>')[1].split('</script>')[0].matchAll(/^(?:async )?function \w+\([^]*?^\}/gm)].map(m=>m[0]).join('\n');
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../sync-merge.js'),'utf8')+'\n'+declarations,ctx);
@@ -52,4 +52,40 @@ test('failed save and expired Access login keep local edits and schedule retries
 });
 test('old cloud-replace action routes through safe synchronization instead',async()=>{
  const base=data([bill('2026-08')]),local=data([bill('2026-08'),bill('2026-09')]);const h=harness(local,{base});h.fetch(async(_url,options)=>options.method==='GET'?response({data:base,version:1}):response({version:2}));await h.run('useCloudCopy()');assert.equal(h.json('DB').tenants[0].entries.length,2);
+});
+
+function limitStorage(h, maxChars) {
+ h.ctx.localStorage.setItem=(key,value)=>{
+  const size=[...h.store].reduce((sum,[k,v])=>sum+(k===key?0:v.length),0)+value.length;
+  if(size>maxChars){const error=new Error('Storage quota exceeded');error.name='QuotaExceededError';throw error;}
+  h.store.set(key,value);
+ };
+}
+test('full browser storage discards only Undo and completes cloud reconciliation',async()=>{
+ const base=data([bill('2026-08')]),remote=data([bill('2026-08'),bill('2026-09',8000)]);
+ const h=harness(base,{base,dirty:false});h.store.set('undo','x'.repeat(5000));limitStorage(h,5500);
+ h.fetch(async()=>response({data:remote,version:2}));
+ assert.equal(await h.run('syncCloudData()'),true);
+ assert.equal(h.json('DB').tenants[0].entries.length,2);
+ assert.equal(JSON.parse(h.store.get('recovery')).data.tenants[0].entries.length,1);
+ assert.deepEqual(JSON.parse(h.store.get('data')),remote);
+ assert.deepEqual(JSON.parse(h.store.get('base')),remote);
+ assert.equal(h.json('readCloudMeta()').dirty,false);
+});
+test('offline edits save even when old Undo fills browser storage',()=>{
+ const local=data([bill('2026-08')]);const h=harness(local,{base:local});
+ h.store.set('undo','x'.repeat(5000));limitStorage(h,5500);h.run('navigator.onLine=false;DB.tenants[0].entries[0].paid=4321;saveData(DB)');
+ assert.equal(JSON.parse(h.store.get('data')).tenants[0].entries[0].paid,4321);
+ assert.equal(h.json('readCloudMeta()').dirty,true);
+ assert.deepEqual(JSON.parse(h.store.get('base')),local);
+});
+test('Undo history is capped by size and keeps the newest available copies',()=>{
+ const h=harness(data([]));h.run("undoStack=Array.from({length:20},(_,i)=>({label:String(i),data:{tenants:[],padding:'x'.repeat(60000)}}));persistUndoStack()");
+ const saved=JSON.parse(h.store.get('undo'));assert.ok(h.store.get('undo').length<=512*1024);assert.equal(saved.at(-1).label,'19');assert.ok(saved.length<20);
+});
+test('unrecoverable quota never removes primary records or claims sync success',async()=>{
+ const base=data([bill('2026-08')]),remote=data([bill('2026-08'),bill('2026-09',8000)]);
+ const h=harness(base,{base,dirty:false});const original=h.store.get('data');limitStorage(h,original.length*2+50);
+ h.fetch(async()=>response({data:remote,version:2}));assert.equal(await h.run('syncCloudData()'),false);
+ assert.equal(h.store.get('data'),original);assert.deepEqual(JSON.parse(h.store.get('base')),base);assert.equal(h.run('cloudSyncState'),'error');
 });
