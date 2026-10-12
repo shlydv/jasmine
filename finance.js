@@ -58,7 +58,16 @@ function openFinance() {
   if(!document.getElementById('expenseMonth').value)document.getElementById('expenseMonth').value=month;
   if(!document.getElementById('finDate').value)document.getElementById('finDate').value=toDateInput(new Date());
   if(!document.getElementById('finBillMonth').value)document.getElementById('finBillMonth').value=month;
-  financeKindChanged();renderFinance();
+  financeKindChanged();setFinanceView(financeView);
+}
+let financeView='add';
+function setFinanceView(view) {
+  financeView=view;
+  document.getElementById('financeForm').style.display=view==='add'?'':'none';
+  document.getElementById('financeSavedSection').style.display=view==='saved'?'':'none';
+  document.getElementById('financeAddButton').className='btn'+(view==='add'?' btn-primary':'');
+  document.getElementById('financeSavedButton').className='btn'+(view==='saved'?' btn-primary':'');
+  if(view==='saved')renderFinance();
 }
 function financeRange() {const from=document.getElementById('finFrom').value,to=document.getElementById('finTo').value;if(!validFinanceDate(from)||!validFinanceDate(to)||from>to)throw new Error('Choose a valid start and end date.');return {from,to};}
 function financeKindChanged() {const electricity=document.getElementById('finKind').value==='dhbvn';document.getElementById('finMeterWrap').style.display=electricity?'block':'none';document.getElementById('finBillMonthWrap').style.display=electricity?'block':'none';if(!document.getElementById('finEditId').value)document.getElementById('finSave').textContent=electricity?'Save electricity payment':'Save expense';}
@@ -68,10 +77,10 @@ function saveFinanceRecord() {
   const record={id:document.getElementById('finEditId').value||crypto.randomUUID(),kind,date,amount:roundMoney(amount),particulars,remarks:document.getElementById('finRemarks').value.trim(),meter:kind==='dhbvn'?document.getElementById('finMeter').value.trim():'',billMonth:kind==='dhbvn'?document.getElementById('finBillMonth').value:''};
   if(kind==='dhbvn'&&!record.meter){toast('Enter a meter name.','error');return;}
   const records=financeRecords();const i=records.findIndex(r=>r.id===record.id);if(i<0)records.push(record);else records[i]=record;DB.financeRecords=records;
-  saveData(DB,{label:(i<0?'Added':'Edited')+' '+(kind==='dhbvn'?'DHBVN payment':'expense')});resetFinanceForm();renderFinance();toast('Saved.','success');
+  saveData(DB,{label:(i<0?'Added':'Edited')+' '+(kind==='dhbvn'?'DHBVN payment':'expense')});if(i<0){document.getElementById('expensePeriod').value='month';document.getElementById('expenseMonth').value=date.slice(0,7);}resetFinanceForm();setFinanceView('saved');toast('Saved.','success');
 }
-function resetFinanceForm() {['finEditId','finAmount','finParticulars','finRemarks'].forEach(id=>document.getElementById(id).value='');document.getElementById('finSave').textContent='Save expense / payment';financeKindChanged();}
-function editFinanceRecord(id) {const r=financeRecords().find(r=>r.id===id);if(!r)return;for(const [key,id2] of Object.entries({id:'finEditId',date:'finDate',kind:'finKind',amount:'finAmount',particulars:'finParticulars',remarks:'finRemarks',meter:'finMeter',billMonth:'finBillMonth'}))document.getElementById(id2).value=r[key]||'';document.getElementById('finSave').textContent='Save changes';financeKindChanged();document.getElementById('financeForm').scrollIntoView({behavior:'smooth'});}
+function resetFinanceForm() {document.getElementById('financeFormTitle').textContent='Add an expense or electricity payment';document.getElementById('finCancel').style.display='none';['finEditId','finAmount','finParticulars','finRemarks'].forEach(id=>document.getElementById(id).value='');document.getElementById('finSave').textContent='Save expense / payment';financeKindChanged();}
+function editFinanceRecord(id) {const r=financeRecords().find(r=>r.id===id);if(!r)return;for(const [key,id2] of Object.entries({id:'finEditId',date:'finDate',kind:'finKind',amount:'finAmount',particulars:'finParticulars',remarks:'finRemarks',meter:'finMeter',billMonth:'finBillMonth'}))document.getElementById(id2).value=r[key]||'';document.getElementById('finSave').textContent='Save changes';document.getElementById('financeFormTitle').textContent='Edit expense or electricity payment';document.getElementById('finCancel').style.display='';financeKindChanged();setFinanceView('add');document.getElementById('financeForm').scrollIntoView({behavior:'smooth'});}
 function removeFinanceRecord(id) {if(!confirm('Remove this expense/payment? You can restore it using Undo in Backup.'))return;DB.financeRecords=financeRecords().filter(r=>r.id!==id);saveData(DB,{label:'Removed expense/payment'});renderFinance();}
 function financeStatement(s,from,to) {
   const row=(label,value)=>`<tr><td class="tl">${label}</td><td>${financeMoney(value)}</td></tr>`;
@@ -83,7 +92,7 @@ function financeTable(headers,rows) {return `<div class="table-wrap"><table clas
 function financeRecordTables(s,actions=false) {
   if(actions) return ['expense','dhbvn'].map(kind=>{
     const records=s.records.filter(r=>r.kind===kind).sort((a,b)=>b.date.localeCompare(a.date));
-    return `<h3>${kind==='expense'?'Other expenses':'DHBVN electricity payments'} <span class="hint">${financeMoney(records.reduce((sum,r)=>sum+Number(r.amount),0))}</span></h3><div class="payment-records">${records.map(r=>`<article class="payment-record"><div class="record-heading"><strong>${escapeHtml(r.particulars)}</strong><strong>${financeMoney(r.amount)}</strong></div><p>${fmtDate(r.date)}${r.meter?' · '+escapeHtml(r.meter):''}${r.billMonth?' · Bill: '+escapeHtml(fmtMonth(r.billMonth)):''}</p>${r.remarks?`<p>${escapeHtml(r.remarks)}</p>`:''}<button class="btn btn-sm" data-id="${escapeAttr(r.id)}" onclick="editFinanceRecord(this.dataset.id)">Edit</button> <button class="btn btn-sm" data-id="${escapeAttr(r.id)}" onclick="removeFinanceRecord(this.dataset.id)">Remove</button></article>`).join('')||'<p class="hint">No payments recorded this month.</p>'}</div>`;
+    return `<h3>${kind==='expense'?'Other expenses':'DHBVN electricity payments'} <span class="hint">${financeMoney(records.reduce((sum,r)=>sum+Number(r.amount),0))}</span></h3><div class="payment-records">${records.map(r=>`<article class="payment-record"><div class="record-heading"><strong>${escapeHtml(r.particulars)}</strong><strong>${financeMoney(r.amount)}</strong></div><p>${fmtDate(r.date)}${r.meter?' · '+escapeHtml(r.meter):''}${r.billMonth?' · Bill: '+escapeHtml(fmtMonth(r.billMonth)):''}</p>${r.remarks?`<p>${escapeHtml(r.remarks)}</p>`:''}<button class="btn btn-sm" data-id="${escapeAttr(r.id)}" onclick="editFinanceRecord(this.dataset.id)">Edit</button> <button class="btn btn-sm" data-id="${escapeAttr(r.id)}" onclick="removeFinanceRecord(this.dataset.id)">Remove</button></article>`).join('')||'<p class="hint">No payments recorded for this period.</p>'}</div>`;
   }).join('');
   const recordRows=(kind)=>s.records.filter(r=>r.kind===kind).sort((a,b)=>a.date.localeCompare(b.date)).map((r,i)=>`<tr><td>${i+1}</td><td>${fmtDate(r.date)}</td><td>${escapeHtml(r.particulars)}${r.meter?' · '+escapeHtml(r.meter):''}${r.billMonth?' · '+escapeHtml(fmtMonth(r.billMonth)):''}</td><td>${escapeHtml(r.remarks)}</td><td>${financeMoney(r.amount)}</td>${actions?`<td><button class="btn btn-sm" data-id="${escapeAttr(r.id)}" onclick="editFinanceRecord(this.dataset.id)">Edit</button> <button class="btn btn-sm" data-id="${escapeAttr(r.id)}" onclick="removeFinanceRecord(this.dataset.id)">Remove</button></td>`:''}</tr>`);
   return '<h3>Expenses</h3>'+financeTable(['S. No.','Date','Expense Particulars','Remarks','Amount (₹)',...(actions?['Action']:[])],recordRows('expense'))+'<h3>DHBVN payments</h3>'+financeTable(['S. No.','Date paid','Particulars / Meter / Bill month','Remarks','Amount (₹)',...(actions?['Action']:[])],recordRows('dhbvn'));
@@ -92,7 +101,17 @@ function financeReportHtml(s,from,to) {return financeStatement(s,from,to)+financ
 function renderFinance() {
   const month=document.getElementById('expenseMonth').value||currentMonthString();
   document.getElementById('expenseMonth').value=month;
-  const records=financeRecords().filter(r=>r.date?.slice(0,7)===month);
+  const custom=document.getElementById('expensePeriod').value==='range';
+  document.getElementById('expenseMonthPicker').style.display=custom?'none':'';
+  document.getElementById('expenseRangePicker').style.display=custom?'':'none';
+  if(!document.getElementById('expenseFrom').value)document.getElementById('expenseFrom').value=month+'-01';
+  if(!document.getElementById('expenseTo').value)document.getElementById('expenseTo').value=toDateInput(new Date(Number(month.slice(0,4)),Number(month.slice(5)),0));
+  const from=document.getElementById('expenseFrom').value,to=document.getElementById('expenseTo').value;
+  if(custom&&(!validFinanceDate(from)||!validFinanceDate(to)||from>to)) {
+    document.getElementById('expenseRecords').innerHTML='Choose a valid start and end date.';
+    return;
+  }
+  const records=financeRecords().filter(r=>custom?validFinanceDate(r.date)&&r.date>=from&&r.date<=to:r.date?.slice(0,7)===month);
   document.getElementById('expenseRecords').innerHTML=financeRecordTables({records},true);
 }
 function renderOwnerSummary() {

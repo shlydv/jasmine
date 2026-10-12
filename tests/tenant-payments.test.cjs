@@ -7,7 +7,7 @@ const path = require('node:path');
 const root = path.join(__dirname,'..');
 function app() {
   const elements = new Map();
-  const el = id => { if (!elements.has(id)) elements.set(id,{value:'',innerHTML:'',style:{},querySelectorAll:()=>[],checkValidity:()=>true,classList:{add(){},remove(){}}}); return elements.get(id); };
+  const el = id => { if (!elements.has(id)) elements.set(id,{value:'',innerHTML:'',style:{},scrollIntoView(){},querySelectorAll:()=>[],checkValidity:()=>true,classList:{add(){},remove(){}}}); return elements.get(id); };
   const context = vm.createContext({console,TextEncoder,Date,document:{getElementById:el},toast(){},confirm:()=>true});
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
   const inline=html.split('<script>')[1].split('</script>')[0];
@@ -213,4 +213,21 @@ test('WhatsApp reference button targets the selected reference and preserves rev
  assert.equal(run('opened[0][0]'),'https://wa.me/919123456789?text=Reviewed%20message%20%26%20details');
  el('referenceChoice').value='1';el('referenceMessage').value='';run('sendReferenceWhatsApp()');assert.match(run('opened[1][0]'),/^https:\/\/wa.me\/919876543210\?text=/);
  run(`readTenantInfo=()=>({reference1Mobile:''})`);run('sendReferenceWhatsApp()');assert.equal(run('opened.length'),2);
+});
+
+test('saved expenses custom dates include both boundaries and filter by payment date, not bill month',()=>{
+ const a=app();a.run(`DB.financeRecords=[{id:'before',kind:'expense',date:'2026-03-31',amount:10,particulars:'Excluded'}, {id:'start',kind:'expense',date:'2026-04-01',amount:100,particulars:'Repair start'}, {id:'end',kind:'dhbvn',date:'2026-09-30',billMonth:'2026-10',meter:'Meter 1',amount:200,particulars:'Electricity end'}, {id:'after',kind:'expense',date:'2026-10-01',amount:20,particulars:'Excluded after'}]`);
+ a.el('expensePeriod').value='range';a.el('expenseFrom').value='2026-04-01';a.el('expenseTo').value='2026-09-30';a.run("setFinanceView('saved')");
+ const html=a.el('expenseRecords').innerHTML;assert.match(html,/Repair start/);assert.match(html,/Electricity end/);assert.doesNotMatch(html,/Excluded/);assert.match(html,/₹100/);assert.match(html,/₹200/);assert.match(html,/editFinanceRecord/);assert.match(html,/removeFinanceRecord/);
+ assert.equal(a.el('financeForm').style.display,'none');assert.equal(a.el('financeSavedSection').style.display,'');
+ a.el('expenseFrom').value='2026-10-01';a.run('renderFinance()');assert.equal(a.el('expenseRecords').innerHTML,'Choose a valid start and end date.');
+ a.el('expensePeriod').value='month';a.el('expenseMonth').value='2026-10';a.run('renderFinance()');assert.match(a.el('expenseRecords').innerHTML,/Excluded after/);assert.doesNotMatch(a.el('expenseRecords').innerHTML,/Electricity end/);
+});
+test('editing a filtered electricity payment preserves its identity and date filter, then removal updates totals',()=>{
+ const a=app();a.run(`DB.financeRecords=[{id:'power',kind:'dhbvn',date:'2026-07-15',amount:200,particulars:'Electricity',meter:'Meter 2',billMonth:'2026-06',remarks:'Old'}]`);
+ a.el('expensePeriod').value='range';a.el('expenseFrom').value='2026-04-01';a.el('expenseTo').value='2026-09-30';a.run("setFinanceView('saved');editFinanceRecord('power')");
+ assert.equal(a.el('financeForm').style.display,'');assert.equal(a.el('finAmount').value,200);assert.equal(a.el('finCancel').style.display,'');
+ a.el('finAmount').value='350';a.el('finRemarks').value='Corrected';a.run('saveFinanceRecord()');
+ assert.equal(a.run('DB.financeRecords.length'),1);assert.equal(a.run('DB.financeRecords[0].id'),'power');assert.equal(a.run("financeTotals('2026-04-01','2026-09-30').dhbvn"),350);assert.equal(a.el('expensePeriod').value,'range');assert.equal(a.el('financeSavedSection').style.display,'');assert.match(a.el('expenseRecords').innerHTML,/Corrected/);
+ a.run("removeFinanceRecord('power')");assert.equal(a.run('DB.financeRecords.length'),0);assert.equal(a.run("financeTotals('2026-04-01','2026-09-30').dhbvn"),0);assert.match(a.el('expenseRecords').innerHTML,/No payments recorded for this period/);
 });
